@@ -5,6 +5,7 @@ export PATH=$HOME/bin:/usr/local/bin:$PATH
 alias vim=nvim
 export VISUAL=nvim
 export EDITOR="$VISUAL"
+export GPG_TTY=`tty`
 
 # Path to your oh-my-zsh installation.
 export ZSH="/Users/surenkov/.oh-my-zsh"
@@ -103,3 +104,7 @@ eval $(thefuck --alias)
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
+
+test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh" || true
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+eval "$(pyenv init -)"

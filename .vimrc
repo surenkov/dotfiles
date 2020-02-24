@@ -10,7 +10,8 @@ set colorcolumn=89
 set foldlevel=99
 set cursorline
 
-set completeopt-=noinsert
+set completeopt+=menu
+set completeopt+=noinsert
 set completeopt-=noselect
 set completeopt-=longest
 set completeopt+=preview
@@ -19,6 +20,20 @@ let g:airline_powerline_fonts = 1
 let g:indentLine_concealcursor = 'inc'
 let g:indentLine_conceallevel = 2
 let g:indentLine_char = '┊'
+
+let g:deoplete#enable_at_startup = 1
+let g:jedi#auto_vim_configuration = 0
+let g:jedi#goto_assignments_command = ''
+let g:jedi#goto_definitions_command = ''
+let g:jedi#use_tabs_not_buffers = 0
+let g:jedi#rename_command = '<Leader>gR'
+let g:jedi#usages_command = '<Leader>gu'
+let g:jedi#completions_enabled = 0
+let g:jedi#smart_auto_mappings = 1
+
+  " Unite/ref and pydoc are more useful.
+  let g:jedi#documentation_command = '<Leader>_K'
+  let g:jedi#auto_close_doc = 1
 
 let g:tablineclosebutton=1
 hi TabLine      ctermfg=Black  ctermbg=Green     cterm=NONE
@@ -90,6 +105,14 @@ Plug 'editorconfig/editorconfig-vim'
 Plug 'mitermayer/vim-prettier'
 Plug '/usr/local/opt/fzf'
 Plug 'junegunn/fzf.vim'
+Plug 'Shougo/deoplete.nvim', { 'do': ':UpdateRemotePlugins' }
+Plug 'Shougo/neosnippet'
+Plug 'Shougo/neosnippet-snippets'
+
+" Deoplete compleion sources
+Plug 'wokalski/autocomplete-flow'
+Plug 'deoplete-plugins/deoplete-jedi'
+
 
 Plug 'airblade/vim-gitgutter'
 Plug 'tpope/vim-fugitive' "Git tools
@@ -115,6 +138,8 @@ set termguicolors
 nmap <C-n> :NERDTreeTabsToggle<CR>
 nmap <leader>n :NERDTreeFind<CR>
 nmap <leader>h :GitGutterPreviewHunk<CR>
+nmap <leader>hp :GitGutterPrevHunk<CR>
+nmap <leader>hn :GitGutterNextHunk<CR>
 
 " FZF bindings
 nmap <Space> :Rg<CR>
@@ -132,3 +157,33 @@ set cmdheight=2
 set updatetime=300
 set shortmess+=c
 set signcolumn=yes
+
+call deoplete#custom#option('omni_patterns', {
+\ 'go': '[^. *\t]\.\w*',
+\})
+
+"use <tab> for completion
+function! TabWrap()
+    if pumvisible()
+        return "\<C-N>"
+    elseif strpart( getline('.'), 0, col('.') - 1 ) =~ '^\s*$'
+        return "\<TAB>"
+    elseif &omnifunc !~ ''
+        return "\<C-X>\<C-O>"
+    else
+        return "\<C-N>"
+    endif
+endfunction
+
+" power tab
+imap <silent><expr><tab> TabWrap()
+
+" Enter: complete&close popup if visible (so next Enter works); else: break undo
+inoremap <silent><expr> <Cr> pumvisible() ?
+            \ deoplete#close_popup() : "<C-g>u<Cr>"
+
+" Ctrl-Space: summon FULL (synced) autocompletion
+inoremap <silent><expr> <C-Space> deoplete#manual_complete()
+
+" Escape: exit autocompletion, go to Normal mode
+inoremap <silent><expr> <Esc> pumvisible() ? "<C-e><Esc>" : "<Esc>"
