@@ -1,6 +1,12 @@
 # dotfiles
 Useful configs (vim, zsh) of mine
 
+### Emacs
+1. Install [Doom Emacs](https://github.com/hlissner/doom-emacs)
+1. Symlink `.doom.d` to your home path
+2. Run `doom sync`
+1. Profit!
+
 ### VIM
 Actually, Neovim. Not sure if it will work with VIM, at least few plugins require VIM 8+.
 
@@ -16,4 +22,4 @@ Useful plugins:
 * [Spaceship Theme]( https://github.com/denysdovhan/spaceship-prompt )
 * [zsh-autosuggestions ](https://github.com/zsh-users/zsh-autosuggestions)
 * [zsh-completions](https://github.com/zsh-users/zsh-completions)
-* [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting)
+  * [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting)

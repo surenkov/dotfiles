@@ -11,6 +11,7 @@ set list
 set colorcolumn=89
 set foldlevel=99
 set cursorline
+set nowrap
 
 set completeopt+=menu
 set completeopt+=noinsert
@@ -59,6 +60,9 @@ call plug#begin('~/.vim/plugged')
 " Themes
 Plug 'Raimondi/delimitMate'
 Plug 'cocopon/iceberg.vim'
+Plug 'arcticicestudio/nord-vim'
+Plug 'chriskempson/base16-vim'
+Plug 'rakr/vim-one'
 Plug 'vim-airline/vim-airline' "Status bar
 Plug 'vim-airline/vim-airline-themes' "Applicable themes
 
@@ -95,24 +99,25 @@ call plug#end()            " required
 " syntax enable " automatically run by Plug 
 
 " Theme settings 
-colors iceberg
 set termguicolors
+colorscheme one
 
-nmap <C-n> :NERDTreeTabsToggle<CR>
-nmap <leader>n :NERDTreeFind<CR>
-nmap <leader>h :GitGutterPreviewHunk<CR>
-nmap <silent> [h :GitGutterPrevHunk<CR>
-nmap <silent> ]h :GitGutterNextHunk<CR>
+nnoremap <silent> <C-n> :NERDTreeTabsToggle<CR>
+nnoremap <silent> <leader>n :NERDTreeFind<CR>
+nnoremap <silent> <leader>c :GitGutterPreviewHunk<CR>
+nnoremap <silent> <leader>v :Vista!!<CR>
 
 " FZF bindings
-nmap <Space> :Rg<CR>
-nmap <C-P> :FZF<CR>
+nmap <nowait> <space><space> :Rg<CR>
+nmap <nowait> <space>p :FZF<CR>
 
 " Sneak F
 map f <Plug>Sneak_s
 map F <Plug>Sneak_S
 
-autocmd Filetype json,txt,startify :IndentLinesDisable
+au Filetype json,txt,startify :IndentLinesDisable
+au Filetype python nmap <buffer><nowait> == :Black<CR>
+au Filetype python vnoremap <buffer><nowait> = =
 
 set nobackup
 set nowritebackup
@@ -127,9 +132,11 @@ let g:indentLine_conceallevel = 2
 let g:indentLine_char = '┊'
 
 let g:vista_fzf_preview = ['right:50%']
-let g:vista_icon_indent = ["╰─ ", "├─ "]
+" let g:vista_icon_indent = ["╰─ ", "├─ "]
+let g:vista_default_executive = 'coc'
 let g:vista#executives = ['coc', 'ctags']
 let g:vista#finders = ['fzf']
+let g:vista#renderer#enable_icon = 0
 
 let g:tablineclosebutton=1
 hi TabLine      ctermfg=Black  ctermbg=Green     cterm=NONE
@@ -224,7 +231,7 @@ command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organize
 " Add (Neo)Vim's native statusline support.
 " NOTE: Please see `:h coc-status` for integrations with external plugins that
 " provide custom statusline: lightline.vim, vim-airline.
-set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
+set statusline+=%{coc#status()}%{NearestMethodOrFunction()}
 
 " Mappings using CoCList:
 " Show all diagnostics.
@@ -241,5 +248,3 @@ nnoremap <silent> <space>s  :<C-u>CocList -I symbols<cr>
 nnoremap <silent> <space>j  :<C-u>CocNext<CR>
 " Do default action for previous item.
 nnoremap <silent> <space>k  :<C-u>CocPrev<CR>
-" Resume latest coc list.
-nnoremap <silent> <space>p  :<C-u>CocListResume<CR>
