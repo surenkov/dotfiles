@@ -2,10 +2,14 @@
 export LC_ALL=en_US.UTF-8
 export PATH=$HOME/bin:/usr/local/bin:$PATH
 
-alias vim=nvim
-export VISUAL=nvim
+export VISUAL="emacs -nw"
 export EDITOR="$VISUAL"
+export GIT_EDITOR="nvim"
 export GPG_TTY=`tty`
+
+alias vim=nvim
+alias em="$VISUAL"
+
 
 # Path to your oh-my-zsh installation.
 export ZSH="/Users/surenkov/.oh-my-zsh"
@@ -90,7 +94,6 @@ bindkey '^F' autosuggest-accept
 # export LANG=en_US.UTF-8
 
 #Preferred editor for local and remote sessions
-export EDITOR='vim'
 eval $(thefuck --alias)
 
 # Compilation flags

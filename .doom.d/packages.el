@@ -51,5 +51,8 @@
 
 ;(package! company-tabnine)
 ;(package! lsp-python-ms)
+;(package! vue-mode)
+
 (package! blacken)
 (package! sql-indent)
+(package! nvm)

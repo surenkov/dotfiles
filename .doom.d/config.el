@@ -25,7 +25,7 @@
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
-(setq doom-theme 'doom-one
+(setq doom-theme 'doom-nord
       doom-font (font-spec :family "Iosevka" :size 13)
       doom-big-font (font-spec :family "Iosevka" :size 16)
       doom-variable-pitch-font (font-spec :family "Iosevka" :size 14)
@@ -33,12 +33,18 @@
       display-line-numbers-type 'relative
       select-enable-clipboard t
       mac-command-modifier 'meta
-      lsp-python-ms-executable "~/.mspyls/Microsoft.Python.LanguageServer"
-      lsp-enabled-clients '(mspyls jsts-ls)
+
+                                        ;lsp-python-ms-executable "~/.mspyls/Microsoft.Python.LanguageServer"
+      lsp-enabled-clients '(mspyls ts-ls jsts-ls vls)
+
+                                        ;lsp-auto-guess-root t
+      mmm-submode-decoration-level 1
 
       projectile-project-search-path '("~/Projects/")
       dired-dwim-target t
       dired-listing-switches "--group-directories-first")
+
+(xterm-mouse-mode -1)
 
 ;; Here are some additional functions/macros that could help you configure Doom:
 ;;
@@ -69,11 +75,15 @@
   (setq company-idle-delay 0
         company-show-numbers t))
 
+(defun python-lsp-flycheck-setup ()
+  (flycheck-disable-checker 'python-pylint)
+  (flycheck-add-next-checker 'lsp 'python-flake8)
+  (flycheck-add-next-checker 'python-flake8 'python-mypy))
+
+(add-hook 'python-mode-local-vars-hook #'python-lsp-flycheck-setup)
+
 (after! lsp
   (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
-
-(after! flycheck
-  (global-flycheck-mode -1))
 
 (setq projectile-project-root-files #'(".projectile")
       projectile-indexing-method 'hybrid
@@ -81,5 +91,9 @@
                                                  projectile-root-top-down-recurring
                                                  projectile-root-bottom-up
                                                  projectile-root-local))
-
-(xterm-mouse-mode -1)
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(default ((t (:background "black")))))
