@@ -50,7 +50,6 @@
 ;(unpin! t)
 
 ;(package! company-tabnine)
-;(package! lsp-python-ms)
 ;(package! vue-mode)
 
 (package! blacken)

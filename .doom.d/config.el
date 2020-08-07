@@ -3,6 +3,12 @@
 ;; Place your private configuration here! Remember, you do not need to run 'doom
 ;; sync' after modifying this file!
 
+(use-package lsp-pyright
+  :load-path "lang/lsp-pyright"
+  :hook (python-mode . (lambda ()
+                         (lsp-deferred)
+                         (flycheck-add-next-checker 'lsp 'python-flake8)
+                         (flycheck-add-next-checker 'python-flake8 'python-mypy))))
 
 ;; Some functionality uses this to identify you, e.g. GPG configuration, email
 ;; clients, file templates and snippets.
@@ -34,10 +40,9 @@
       select-enable-clipboard t
       mac-command-modifier 'meta
 
-                                        ;lsp-python-ms-executable "~/.mspyls/Microsoft.Python.LanguageServer"
-      lsp-enabled-clients '(mspyls ts-ls jsts-ls vls)
-
-                                        ;lsp-auto-guess-root t
+      lsp-enabled-clients '(mspyright jsts-ls vls)
+      lsp-python-ms-use-pyright '(t t)
+      flycheck-disabled-checkers '(flycheck-pylint)
       mmm-submode-decoration-level 1
 
       projectile-project-search-path '("~/Projects/")
@@ -63,7 +68,7 @@
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 
-(map! :ne "SPC t t" #'treemacs)
+(map! :ne "SPC f t" #'treemacs)
 (map! :ne "C-i" #'evil-jump-forward)
 (map! :ne "g r" #'+lookup/references)
 
@@ -73,27 +78,30 @@
 
 (after! company
   (setq company-idle-delay 0
-        company-show-numbers t))
-
-(defun python-lsp-flycheck-setup ()
-  (flycheck-disable-checker 'python-pylint)
-  (flycheck-add-next-checker 'lsp 'python-flake8)
-  (flycheck-add-next-checker 'python-flake8 'python-mypy))
-
-(add-hook 'python-mode-local-vars-hook #'python-lsp-flycheck-setup)
+        company-dabbrev-downcase 0))
 
 (after! lsp
   (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
 
-(setq projectile-project-root-files #'(".projectile")
+(after! flycheck
+  (flycheck-add-next-checker 'lsp 'python-flake8))
+
+(setq projectile-project-root-files #'(".projectile" ".git")
       projectile-indexing-method 'hybrid
       projectile-project-root-files-functions #'(projectile-root-top-down
                                                  projectile-root-top-down-recurring
                                                  projectile-root-bottom-up
                                                  projectile-root-local))
+
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(default ((t (:background "black")))))
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages '(lsp-pyright)))
