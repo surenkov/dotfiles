@@ -53,5 +53,6 @@
 ;(package! vue-mode)
 
 (package! blacken)
+(package! lsp-pyright :recipe (:repo "emacs-lsp/lsp-pyright"))
 (package! sql-indent)
 (package! nvm)

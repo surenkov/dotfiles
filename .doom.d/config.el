@@ -3,13 +3,6 @@
 ;; Place your private configuration here! Remember, you do not need to run 'doom
 ;; sync' after modifying this file!
 
-(use-package lsp-pyright
-  :load-path "lang/lsp-pyright"
-  :hook (python-mode . (lambda ()
-                         (lsp-deferred)
-                         (flycheck-add-next-checker 'lsp 'python-flake8)
-                         (flycheck-add-next-checker 'python-flake8 'python-mypy))))
-
 ;; Some functionality uses this to identify you, e.g. GPG configuration, email
 ;; clients, file templates and snippets.
 (setq user-full-name "Savva Surenkov"
@@ -40,14 +33,16 @@
       select-enable-clipboard t
       mac-command-modifier 'meta
 
-      lsp-enabled-clients '(mspyright jsts-ls vls)
-      lsp-python-ms-use-pyright '(t t)
-      flycheck-disabled-checkers '(flycheck-pylint)
+      lsp-enabled-clients '(pyright jsts-ls vls)
+      lsp-pyright-disable-language-services nil
+      lsp-pyright-disable-organize-imports nil
       mmm-submode-decoration-level 1
 
       projectile-project-search-path '("~/Projects/")
       dired-dwim-target t
-      dired-listing-switches "--group-directories-first")
+      dired-listing-switches "-al --group-directories-first")
+
+(setq-default flycheck-disabled-checkers '(python-pylint))
 
 (xterm-mouse-mode -1)
 
@@ -76,15 +71,19 @@
   (global-set-key [mouse-4] 'scroll-down-line)
   (global-set-key [mouse-5] 'scroll-up-line))
 
+(use-package! lsp-pyright)
+
+;; I'd be doomed for that
+(eval-after-load 'lsp-clients
+  '(progn
+     (lsp-dependency 'pyright `(:system ,(concat doom-private-dir "pylance-server.sh")))))
+
 (after! company
   (setq company-idle-delay 0
         company-dabbrev-downcase 0))
 
 (after! lsp
   (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
-
-(after! flycheck
-  (flycheck-add-next-checker 'lsp 'python-flake8))
 
 (setq projectile-project-root-files #'(".projectile" ".git")
       projectile-indexing-method 'hybrid
@@ -99,9 +98,3 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(default ((t (:background "black")))))
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages '(lsp-pyright)))
