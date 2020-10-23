@@ -18,6 +18,9 @@
        ;;chinese
        ;;japaner
 
+       :os
+       macos
+
        :completion
        company           ; the ultimate code completion backend
        (helm +fuzzy)              ; the *other* search engine for love and life
@@ -94,7 +97,6 @@
         +devdocs
         +docsets)              ; navigate your code and its documentation
        lsp
-       macos             ; MacOS-specific commands
        magit             ; a git porcelain for Emacs
        make              ; run make tasks from Emacs
        ;;pass              ; password manager for nerds

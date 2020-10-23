@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-node $HOME/.vscode/extensions/ms-python.vscode-pylance-2020.8.0/server/server.bundle.js "$@"
+VSCODE_EXT_DIR="$HOME/.vscode/extensions"
+PYLANCE_DIR_PATTERN='ms-python.vscode-pylance*'
+
+PYLANCE_DIR=$(find $VSCODE_EXT_DIR -name "$PYLANCE_DIR_PATTERN" -print -quit)
+node $PYLANCE_DIR/dist/server.bundle.js "$@"

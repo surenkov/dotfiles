@@ -54,5 +54,7 @@
 
 (package! blacken)
 (package! lsp-pyright :recipe (:repo "emacs-lsp/lsp-pyright"))
-(package! sql-indent)
+(package! dash-at-point)
+
+;(package! sql-indent)
 (package! nvm)

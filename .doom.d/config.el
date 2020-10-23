@@ -30,21 +30,70 @@
       doom-variable-pitch-font (font-spec :family "Iosevka" :size 14)
 
       display-line-numbers-type 'relative
-      select-enable-clipboard t
       mac-command-modifier 'meta
 
-      lsp-enabled-clients '(pyright jsts-ls vls)
-      lsp-pyright-disable-language-services nil
-      lsp-pyright-disable-organize-imports nil
+      select-enable-clipboard t
+      ;select-enable-primary t
+
       mmm-submode-decoration-level 1
 
       projectile-project-search-path '("~/Projects/")
-      dired-dwim-target t
-      dired-listing-switches "-al --group-directories-first")
+      ls-lisp-dirs-first t
+      dired-dwim-target t)
+      ;dired-listing-switches "-al --group-directories-first")
+
+(unless window-system
+  (require 'mouse)
+  (xterm-mouse-mode t)
+  (global-set-key [mouse-4] (lambda ()
+                              (interactive)
+                              (scroll-down 1)))
+  (global-set-key [mouse-5] (lambda ()
+                              (interactive)
+                              (scroll-up 1)))
+  (defun track-mouse ()
+    (setq mouse-sel-mode t)))
+
 
 (setq-default flycheck-disabled-checkers '(python-pylint))
+(setq +lookup-provider-url-alist
+      (cons '("Dash.app" dash-at-point "dash://%s") +lookup-provider-url-alist))
 
-(xterm-mouse-mode -1)
+(add-to-list 'auto-mode-alist '("\\.rml\\'" . web-mode))
+
+(after! company
+  (setq company-idle-delay 0
+        company-dabbrev-downcase 0))
+
+(after! lsp
+  (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
+
+(defun web-mode-better-self-closing-indent (&rest _)
+  (setq web-mode-attr-indent-offset nil))
+
+(add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
+(add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
+
+(use-package! lsp-pyright)
+
+(with-eval-after-load 'lsp-mode
+  ;(push "[/\\\\][^/\\\\]*\\.\\(json\\|html\\|jade\\)$" lsp-file-watch-ignored)
+
+  (setq lsp-enabled-clients '(pyright jsts-ls ts-ls html-ls css-ls vls)
+        lsp-pyright-disable-language-services nil
+        lsp-pyright-disable-organize-imports nil
+        ;lsp-idle-delay 0.500
+        lsp-enable-file-watchers nil
+        lsp-restart 'auto-restart))
+
+
+
+(setq projectile-project-root-files #'(".projectile" ".git")
+      projectile-indexing-method 'hybrid
+      projectile-project-root-files-functions #'(projectile-root-top-down
+                                                 projectile-root-top-down-recurring
+                                                 projectile-root-bottom-up
+                                                 projectile-root-local))
 
 ;; Here are some additional functions/macros that could help you configure Doom:
 ;;
@@ -62,35 +111,13 @@
 ;;
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
+;;
 
-(map! :ne "SPC f t" #'treemacs)
-(map! :ne "C-i" #'evil-jump-forward)
-(map! :ne "g r" #'+lookup/references)
+(map! :ne "C-i" #'evil-jump-forward
+      :ne "C-o" #'evil-jump-backward)
 
-(unless (display-graphic-p)
-  (global-set-key [mouse-4] 'scroll-down-line)
-  (global-set-key [mouse-5] 'scroll-up-line))
-
-(use-package! lsp-pyright)
-
-;; I'd be doomed for that
-(eval-after-load 'lsp-clients
-  '(progn
-     (lsp-dependency 'pyright `(:system ,(concat doom-private-dir "pylance-server.sh")))))
-
-(after! company
-  (setq company-idle-delay 0
-        company-dabbrev-downcase 0))
-
-(after! lsp
-  (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
-
-(setq projectile-project-root-files #'(".projectile" ".git")
-      projectile-indexing-method 'hybrid
-      projectile-project-root-files-functions #'(projectile-root-top-down
-                                                 projectile-root-top-down-recurring
-                                                 projectile-root-bottom-up
-                                                 projectile-root-local))
+(map! :ne "SPC f t" #'treemacs
+      :ne "g r" #'+lookup/references)
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
