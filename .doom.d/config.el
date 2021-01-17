@@ -54,7 +54,6 @@
   (defun track-mouse ()
     (setq mouse-sel-mode t)))
 
-
 (setq-default flycheck-disabled-checkers '(python-pylint))
 (setq +lookup-provider-url-alist
       (cons '("Dash.app" dash-at-point "dash://%s") +lookup-provider-url-alist))
@@ -76,16 +75,15 @@
 
 (use-package! lsp-pyright)
 
-(with-eval-after-load 'lsp-mode
-  ;(push "[/\\\\][^/\\\\]*\\.\\(json\\|html\\|jade\\)$" lsp-file-watch-ignored)
+(setq lsp-disabled-clients '(flow-ls)
+      ;; lsp-enabled-clients '(pyright jsts-ls ts-ls html-ls css-ls vls)
+      lsp-pyright-disable-language-services nil
+      lsp-pyright-disable-organize-imports nil
 
-  (setq lsp-enabled-clients '(pyright jsts-ls ts-ls html-ls css-ls vls)
-        lsp-pyright-disable-language-services nil
-        lsp-pyright-disable-organize-imports nil
-        ;lsp-idle-delay 0.500
-        lsp-enable-file-watchers nil
-        lsp-restart 'auto-restart))
-
+                                        ;lsp-idle-delay 0.500
+      lsp-log-io nil
+      lsp-enable-file-watchers nil
+      lsp-restart 'auto-restart)
 
 
 (setq projectile-project-root-files #'(".projectile" ".git")
