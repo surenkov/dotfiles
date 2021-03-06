@@ -43,6 +43,8 @@
       ;dired-listing-switches "-al --group-directories-first")
 
 (unless window-system
+  (require 'xclip)
+  (xclip-mode 1)
   (require 'mouse)
   (xterm-mouse-mode t)
   (global-set-key [mouse-4] (lambda ()
@@ -76,7 +78,6 @@
 (use-package! lsp-pyright)
 
 (setq lsp-disabled-clients '(flow-ls)
-      ;; lsp-enabled-clients '(pyright jsts-ls ts-ls html-ls css-ls vls)
       lsp-pyright-disable-language-services nil
       lsp-pyright-disable-organize-imports nil
 

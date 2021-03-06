@@ -58,3 +58,4 @@
 
 ;(package! sql-indent)
 (package! nvm)
+(package! xclip)
