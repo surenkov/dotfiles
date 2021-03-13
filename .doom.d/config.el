@@ -8,6 +8,9 @@
 (setq user-full-name "Savva Surenkov"
       user-mail-address "savva@surenkov.space")
 
+(require 'xclip)
+(xclip-mode 1)
+
 ;; Doom exposes five (optional) variables for controlling fonts in Doom. Here
 ;; are the three important ones:
 ;;
@@ -24,6 +27,7 @@
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
+
 (setq doom-theme 'doom-nord
       doom-font (font-spec :family "Iosevka" :size 13)
       doom-big-font (font-spec :family "Iosevka" :size 16)
@@ -33,7 +37,9 @@
       mac-command-modifier 'meta
 
       select-enable-clipboard t
-      ;select-enable-primary t
+      select-enable-primary nil
+      require-final-newline t
+      next-line-add-newlines nil
 
       mmm-submode-decoration-level 1
 
@@ -42,9 +48,9 @@
       dired-dwim-target t)
       ;dired-listing-switches "-al --group-directories-first")
 
+(setq-default cursor-type 'hollow)
+
 (unless window-system
-  (require 'xclip)
-  (xclip-mode 1)
   (require 'mouse)
   (xterm-mouse-mode t)
   (global-set-key [mouse-4] (lambda ()
@@ -113,9 +119,9 @@
 ;;
 
 (map! :ne "C-i" #'evil-jump-forward
-      :ne "C-o" #'evil-jump-backward)
-
-(map! :ne "SPC f t" #'treemacs
+      :ne "C-o" #'evil-jump-backward
+      :ne "SPC j" #'evilem-motion-find-char
+      :ne "SPC f t" #'treemacs
       :ne "g r" #'+lookup/references)
 
 (custom-set-faces

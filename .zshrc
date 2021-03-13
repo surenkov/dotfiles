@@ -81,6 +81,24 @@ ZSH_THEME="spaceship"
 plugins=(git dotenv osx python django docker node vim-interaction virtualenv zsh-autosuggestions zsh-completions zsh-syntax-highlighting)
 autoload -U compinit && compinit
 
+SPACESHIP_PROMPT_ORDER=(
+  time          # Time stamps section
+  dir           # Current directory section
+  git           # Git section (git_branch + git_status)
+  node          # Node.js section
+  golang        # Go section
+  venv          # virtualenv section
+  pyenv         # Pyenv section
+  ember         # Ember.js section
+  exec_time     # Execution time
+  line_sep      # Line break
+  battery       # Battery level and status
+  vi_mode       # Vi-mode indicator
+  jobs          # Background jobs indicator
+  exit_code     # Exit code section
+  char          # Prompt character
+)
+
 source $ZSH/oh-my-zsh.sh
 
 bindkey -M vicmd '?' history-incremental-search-backward
