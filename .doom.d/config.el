@@ -34,7 +34,6 @@
       doom-variable-pitch-font (font-spec :family "Iosevka" :size 14)
 
       display-line-numbers-type 'relative
-      mac-command-modifier 'meta
 
       select-enable-clipboard t
       select-enable-primary nil
@@ -44,11 +43,16 @@
       mmm-submode-decoration-level 1
 
       projectile-project-search-path '("~/Projects/")
+
       ls-lisp-dirs-first t
+      dired-listing-switches "-aBhl  --group-directories-first" ; requires ls from 'coreutils' on macOS
       dired-dwim-target t)
-      ;dired-listing-switches "-al --group-directories-first")
 
 (setq-default cursor-type 'hollow)
+
+(when (eq system-type 'darwin) ;; mac specific settings
+  (setq mac-command-modifier 'meta
+        insert-directory-program "/usr/local/bin/gls"))
 
 (unless window-system
   (require 'mouse)
@@ -68,9 +72,19 @@
 
 (add-to-list 'auto-mode-alist '("\\.rml\\'" . web-mode))
 
+;; (use-package! company-tabnine
+;;   :after company
+;;   :when (featurep! :completion company)
+;;   :config
+;;   (cl-pushnew 'company-tabnine (default-value 'company-backends)))
+
+;; (setq +lsp-company-backend '(company-tabnine company-capf company-yasnippet))
+
+
 (after! company
   (setq company-idle-delay 0
-        company-dabbrev-downcase 0))
+        company-dabbrev-downcase 0
+        company-show-numbers t))
 
 (after! lsp
   (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
@@ -86,8 +100,6 @@
 (setq lsp-disabled-clients '(flow-ls)
       lsp-pyright-disable-language-services nil
       lsp-pyright-disable-organize-imports nil
-
-                                        ;lsp-idle-delay 0.500
       lsp-log-io nil
       lsp-enable-file-watchers nil
       lsp-restart 'auto-restart)
@@ -95,10 +107,10 @@
 
 (setq projectile-project-root-files #'(".projectile" ".git")
       projectile-indexing-method 'hybrid
-      projectile-project-root-files-functions #'(projectile-root-top-down
-                                                 projectile-root-top-down-recurring
-                                                 projectile-root-bottom-up
-                                                 projectile-root-local))
+      projectile-project-root-functions #'(projectile-root-top-down
+                                           projectile-root-top-down-recurring
+                                           projectile-root-bottom-up
+                                           projectile-root-local))
 
 ;; Here are some additional functions/macros that could help you configure Doom:
 ;;
@@ -123,10 +135,3 @@
       :ne "SPC j" #'evilem-motion-find-char
       :ne "SPC f t" #'treemacs
       :ne "g r" #'+lookup/references)
-
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(default ((t (:background "black")))))

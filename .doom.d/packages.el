@@ -57,5 +57,6 @@
 (package! dash-at-point)
 
 ;(package! sql-indent)
+(package! company-tabnine)
 (package! nvm)
 (package! xclip)

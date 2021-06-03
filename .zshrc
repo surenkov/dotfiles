@@ -1,6 +1,6 @@
 # If you come from bash you might have to change your $PATH.
 export LC_ALL=en_US.UTF-8
-export PATH=$HOME/bin:$HOME/.bin:/usr/local/bin:$PATH
+export PATH=$HOME/bin:$HOME/.bin:$PATH
 
 export VISUAL="emacs -nw"
 export EDITOR="$VISUAL"
@@ -128,6 +128,6 @@ eval $(thefuck --alias)
 
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh" || true
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-eval "$(pyenv init -)"
 
 export PATH="$HOME/.poetry/bin:$PATH"
+eval "$(pyenv init -)"
