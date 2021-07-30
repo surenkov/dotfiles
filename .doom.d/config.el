@@ -8,9 +8,6 @@
 (setq user-full-name "Savva Surenkov"
       user-mail-address "savva@surenkov.space")
 
-(require 'xclip)
-(xclip-mode 1)
-
 ;; Doom exposes five (optional) variables for controlling fonts in Doom. Here
 ;; are the three important ones:
 ;;
@@ -33,67 +30,58 @@
       doom-big-font (font-spec :family "Iosevka" :size 16)
       doom-variable-pitch-font (font-spec :family "Iosevka" :size 14)
 
+      truncate-string-ellipsis "…"
+      scroll-margin 3
+      evil-want-fine-undo t
+      undo-limit 8000000
+
       display-line-numbers-type 'relative
 
+      show-trailing-whitespace t
       select-enable-clipboard t
       select-enable-primary nil
       require-final-newline t
       next-line-add-newlines nil
-
-      mmm-submode-decoration-level 1
+      ;;display-fill-column-indicator-character ?\u23b8
 
       projectile-project-search-path '("~/Projects/")
+      +ivy-buffer-preview t
 
       ls-lisp-dirs-first t
       dired-listing-switches "-aBhl  --group-directories-first" ; requires ls from 'coreutils' on macOS
       dired-dwim-target t)
 
+(global-subword-mode 1)                 ; Iterate through CamelCase words
 (setq-default cursor-type 'hollow)
 
 (when (eq system-type 'darwin) ;; mac specific settings
   (setq mac-command-modifier 'meta
         insert-directory-program "/usr/local/bin/gls"))
 
-(unless window-system
-  (require 'mouse)
-  (xterm-mouse-mode t)
-  (global-set-key [mouse-4] (lambda ()
-                              (interactive)
-                              (scroll-down 1)))
-  (global-set-key [mouse-5] (lambda ()
-                              (interactive)
-                              (scroll-up 1)))
-  (defun track-mouse ()
-    (setq mouse-sel-mode t)))
+(add-hook! (prog-mode conf-mode text-mode) #'display-fill-column-indicator-mode)
+
+(defadvice! prompt-for-buffer (&rest _)
+  :after '(evil-window-split evil-window-vsplit)
+  (+ivy/switch-buffer))
 
 (setq-default flycheck-disabled-checkers '(python-pylint))
 (setq +lookup-provider-url-alist
       (cons '("Dash.app" dash-at-point "dash://%s") +lookup-provider-url-alist))
 
-(add-to-list 'auto-mode-alist '("\\.rml\\'" . web-mode))
-
-;; (use-package! company-tabnine
-;;   :after company
-;;   :when (featurep! :completion company)
-;;   :config
-;;   (cl-pushnew 'company-tabnine (default-value 'company-backends)))
-
-;; (setq +lsp-company-backend '(company-tabnine company-capf company-yasnippet))
-
-
 (after! company
   (setq company-idle-delay 0
         company-dabbrev-downcase 0
-        company-show-numbers t))
+        company-show-quick-access t))
 
-(after! lsp
-  (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
+(add-to-list 'auto-mode-alist '("\\.rml\\'" . web-mode))
 
 (defun web-mode-better-self-closing-indent (&rest _)
   (setq web-mode-attr-indent-offset nil))
-
 (add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
 (add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
+
+(after! lsp
+  (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
 
 (use-package! lsp-pyright)
 
@@ -135,3 +123,13 @@
       :ne "SPC j" #'evilem-motion-find-char
       :ne "SPC f t" #'treemacs
       :ne "g r" #'+lookup/references)
+
+(custom-set-faces!
+  ;; custom-set-faces was added by Custom.
+  ;; If you edit it by hand, you could mess it up, so be careful.
+  ;; Your init file should contain only one such instance.
+  ;; If there is more than one, they won't work right.
+  '(default :background "#0e1115"))
+
+(custom-theme-set-faces! 'doom-nord
+  '(default :background "#0e1115"))

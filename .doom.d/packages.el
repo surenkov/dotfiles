@@ -57,6 +57,7 @@
 (package! dash-at-point)
 
 ;(package! sql-indent)
-(package! company-tabnine)
+;(package! company-tabnine)
 (package! nvm)
 (package! xclip)
+;(package! solaire-mode :disable t)
