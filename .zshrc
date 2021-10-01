@@ -78,7 +78,7 @@ ZSH_THEME="spaceship"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git dotenv osx python django docker node vim-interaction virtualenv zsh-autosuggestions zsh-completions zsh-syntax-highlighting)
+plugins=(git dotenv osx python docker node vim-interaction virtualenv zsh-autosuggestions zsh-completions zsh-syntax-highlighting)
 autoload -U compinit && compinit
 
 SPACESHIP_PROMPT_ORDER=(
