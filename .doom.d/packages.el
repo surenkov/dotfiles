@@ -56,8 +56,5 @@
 (package! lsp-pyright :recipe (:repo "emacs-lsp/lsp-pyright"))
 (package! dash-at-point)
 
-;(package! sql-indent)
-;(package! company-tabnine)
 (package! nvm)
 (package! xclip)
-;(package! solaire-mode :disable t)

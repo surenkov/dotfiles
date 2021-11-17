@@ -85,7 +85,7 @@
 
 (use-package! lsp-pyright)
 
-(setq lsp-disabled-clients '(flow-ls)
+(setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-pyright-disable-language-services nil
       lsp-pyright-disable-organize-imports nil
       lsp-log-io nil
