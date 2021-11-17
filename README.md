@@ -23,3 +23,11 @@ Useful plugins:
 * [zsh-autosuggestions ](https://github.com/zsh-users/zsh-autosuggestions)
 * [zsh-completions](https://github.com/zsh-users/zsh-completions)
   * [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting)
+
+### Aacritty
+symlink `alacritty.yml` to `~/.config/alacritty/alacritty.yml`;
+
+### Aacritty
+1. symlink `.tmux.conf` to `~/.tmux.conf`;
+2. hit `C-z I` in active tmux session to install the plugins
+

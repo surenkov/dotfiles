@@ -17,24 +17,24 @@ window:
   #
   # Specified in number of columns/lines, not pixels.
   # If both are `0`, this setting is ignored.
-  dimensions:
-    columns: 150
-    lines: 40
+  # dimensions:
+  #   columns: 150
+  #   lines: 40
 
   # Window position (changes require restart)
   #
   # Specified in number of pixels.
   # If the position is not set, the window manager will handle the placement.
-  position:
-    x: 75
-    y: 75
+  # position:
+  #   x: 75
+  #   y: 75
 
   # Window padding (changes require restart)
   #
   # Blank space added around the window in pixels. This padding is scaled
   # by DPI and the specified value is always added at both opposing sides.
   padding:
-    x: 5
+    x: 2
     y: 0
 
   # Spread additional padding evenly around the terminal content.
@@ -49,7 +49,7 @@ window:
   # Values for `decorations` (macOS only):
   #     - transparent: Title bar, transparent background and title bar buttons
   #     - buttonless: Title bar, transparent background, but no title bar buttons
-  decorations: transparent
+  decorations: full
 
   # Startup Mode (changes require restart)
   #
@@ -448,7 +448,7 @@ url:
 #
 # If the same trigger is assigned to multiple actions, all of them are executed
 # at once.
-#key_bindings:
+key_bindings:
 # (Windows, Linux, and BSD only)
 #- { key: V,        mods: Control|Shift, action: Paste            }
 #- { key: C,        mods: Control|Shift, action: Copy             }
@@ -469,12 +469,13 @@ url:
 #- { key: Minus,  mods: Command,         action: DecreaseFontSize }
 #- { key: K,      mods: Command,         action: ClearHistory     }
 #- { key: K,      mods: Command,         chars: "\x0c"            }
-#- { key: V,      mods: Command,         action: Paste            }
-#- { key: C,      mods: Command,         action: Copy             }
+ - { key: V,      mods: Command,         action: Paste            }
+ - { key: C,      mods: Command,         action: Copy             }
 #- { key: H,      mods: Command,         action: Hide             }
 #- { key: M,      mods: Command,         action: Minimize         }
-#- { key: Q,      mods: Command,         action: Quit             }
+ - { key: Q,      mods: Command,         action: Quit             }
 #- { key: W,      mods: Command,         action: Quit             }
+ - { key: Return, mods: Command,         action: ToggleFullscreen }
 #- { key: F,      mods: Command|Control, action: ToggleFullscreen }
 
 #- { key: Paste,                    action: Paste                            }
