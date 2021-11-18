@@ -48,7 +48,7 @@
       +ivy-buffer-preview t
 
       ls-lisp-dirs-first t
-      dired-listing-switches "-aBhl  --group-directories-first" ; requires ls from 'coreutils' on macOS
+      dired-listing-switches "-aBhl --group-directories-first" ; requires ls from 'coreutils' on macOS
       dired-dwim-target t)
 
 (global-subword-mode 1)                 ; Iterate through CamelCase words
