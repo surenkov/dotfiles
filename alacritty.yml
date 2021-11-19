@@ -474,7 +474,7 @@ key_bindings:
 #- { key: H,      mods: Command,         action: Hide             }
 #- { key: M,      mods: Command,         action: Minimize         }
  - { key: Q,      mods: Command,         action: Quit             }
-#- { key: W,      mods: Command,         action: Quit             }
+ - { key: W,      mods: Command,         action: None             }
  - { key: Return, mods: Command,         action: ToggleFullscreen }
 #- { key: F,      mods: Command|Control, action: ToggleFullscreen }
 
