@@ -83,8 +83,6 @@
 (after! lsp
   (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
 
-(use-package! lsp-pyright)
-
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-pyright-disable-language-services nil
       lsp-pyright-disable-organize-imports nil
