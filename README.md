@@ -27,7 +27,7 @@ Useful plugins:
 ### Aacritty
 symlink `alacritty.yml` to `~/.config/alacritty/alacritty.yml`;
 
-### Aacritty
+### Tmux
 1. symlink `.tmux.conf` to `~/.tmux.conf`;
 2. hit `C-z I` in active tmux session to install the plugins
 
