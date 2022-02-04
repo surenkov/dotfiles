@@ -83,6 +83,10 @@
 (after! lsp
   (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
 
+(after! 'c++-mode
+  (lsp-deferred)
+  (platformio-conditionally-enable))
+
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-pyright-disable-language-services nil
       lsp-pyright-disable-organize-imports nil

@@ -57,3 +57,6 @@
 
 (package! nvm)
 (package! xclip)
+(package! platformio-mode)
+
+(unpin!  erlang)
