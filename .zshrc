@@ -1,6 +1,6 @@
 # If you come from bash you might have to change your $PATH.
 export LC_ALL=en_US.UTF-8
-export PATH=$HOME/bin:$HOME/.bin:$PATH
+export PATH=/usr/local/sbin:$HOME/bin:$HOME/.bin:$PATH
 
 export VISUAL="emacs -nw"
 export EDITOR="$VISUAL"
@@ -10,10 +10,11 @@ export GPG_TTY=`tty`
 alias vim=nvim
 alias em="$VISUAL"
 alias htop="TERM=xterm htop"
+alias ipy=ipython3
 
 
 # Path to your oh-my-zsh installation.
-export ZSH="/Users/surenkov/.oh-my-zsh"
+export ZSH="$HOME/.oh-my-zsh"
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
@@ -79,7 +80,7 @@ ZSH_THEME="spaceship"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git dotenv macos python docker node virtualenv zsh-autosuggestions zsh-completions zsh-syntax-highlighting)
+plugins=(git dotenv macos python docker node virtualenv ruby zsh-autosuggestions zsh-completions zsh-syntax-highlighting)
 autoload -U compinit && compinit
 
 SPACESHIP_PROMPT_ORDER=(
@@ -87,6 +88,7 @@ SPACESHIP_PROMPT_ORDER=(
   dir           # Current directory section
   git           # Git section (git_branch + git_status)
   node          # Node.js section
+  ruby          # Ruby section
   golang        # Go section
   venv          # virtualenv section
   pyenv         # Pyenv section
@@ -129,4 +131,6 @@ eval $(thefuck --alias)
 
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh" || true
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
 eval "$(pyenv init -)"
+# eval "$(rbenv init - zsh)"

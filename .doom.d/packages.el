@@ -58,5 +58,8 @@
 (package! nvm)
 (package! xclip)
 (package! platformio-mode)
+(package! hledger-mode)
+(package! logview)
+(package! bazel)
 
-(unpin!  erlang)
+;(unpin!  erlang)

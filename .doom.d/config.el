@@ -51,7 +51,17 @@
       dired-listing-switches "-aBhl --group-directories-first" ; requires ls from 'coreutils' on macOS
       dired-dwim-target t)
 
+(unless (display-graphic-p)
+  (xterm-mouse-mode 1))                    ; Enable mouse suport in terminal
+(global-set-key [mouse-4] (lambda () (interactive) (scroll-down 4)))
+(global-set-key [mouse-5] (lambda () (interactive) (scroll-up 4)))
+(global-set-key [S-mouse-4] (lambda () (interactive) (scroll-down 1)))
+(global-set-key [S-mouse-5] (lambda () (interactive) (scroll-up 1)))
+(global-set-key [C-mouse-4] (lambda () (interactive) (scroll-down)))
+(global-set-key [C-mouse-5] (lambda () (interactive) (scroll-up)))
+
 (global-subword-mode 1)                 ; Iterate through CamelCase words
+
 (setq-default cursor-type 'hollow)
 
 (when (eq system-type 'darwin) ;; mac specific settings
@@ -80,9 +90,6 @@
 (add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
 (add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
 
-(after! lsp
-  (add-hook 'pipenv-mode-hook #'lsp-restart-workspace))
-
 (after! 'c++-mode
   (lsp-deferred)
   (platformio-conditionally-enable))
@@ -102,6 +109,21 @@
                                            projectile-root-bottom-up
                                            projectile-root-local))
 
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((emacs-lisp . t)
+   (haskell . nil)
+   (latex . t)
+   (ledger . t)
+   (hledger . t)
+   (python . t)
+   (ruby . t)
+   (javascript . t)
+   (html . t)
+   (sh . t)
+   (sql . nil)
+   (sqlite . t)))
+
 ;; Here are some additional functions/macros that could help you configure Doom:
 ;;
 ;; - `load!' for loading external *.el files relative to this one
@@ -118,7 +140,6 @@
 ;;
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
-;;
 
 (map! :ne "C-i" #'evil-jump-forward
       :ne "C-o" #'evil-jump-backward
@@ -126,12 +147,6 @@
       :ne "SPC f t" #'treemacs
       :ne "g r" #'+lookup/references)
 
-(custom-set-faces!
-  ;; custom-set-faces was added by Custom.
-  ;; If you edit it by hand, you could mess it up, so be careful.
-  ;; Your init file should contain only one such instance.
-  ;; If there is more than one, they won't work right.
-  '(default :background "default"))
-
-(custom-theme-set-faces! 'doom-nord
-  '(default :background "default"))
+(unless (display-graphic-p)
+  (custom-set-faces! '(default :background "default"))
+  (custom-theme-set-faces! 'doom-nord '(default :background "default")))
