@@ -2,9 +2,9 @@
 export LC_ALL=en_US.UTF-8
 export PATH=/usr/local/sbin:$HOME/bin:$HOME/.bin:$PATH
 
-export VISUAL="emacs -nw"
+export VISUAL='nvim'
 export EDITOR="$VISUAL"
-export GIT_EDITOR="nvim"
+export GIT_EDITOR='$VISUAL'
 export GPG_TTY=`tty`
 
 alias vim=nvim

@@ -3,28 +3,35 @@
 ;; Place your private configuration here! Remember, you do not need to run 'doom
 ;; sync' after modifying this file!
 
+
 ;; Some functionality uses this to identify you, e.g. GPG configuration, email
-;; clients, file templates and snippets.
+;; clients, file templates and snippets. It is optional.
 (setq user-full-name "Savva Surenkov"
       user-mail-address "savva@surenkov.space")
 
-;; Doom exposes five (optional) variables for controlling fonts in Doom. Here
-;; are the three important ones:
+;; Doom exposes five (optional) variables for controlling fonts in Doom:
 ;;
-;; + `doom-font'
-;; + `doom-variable-pitch-font'
-;; + `doom-big-font' -- used for `doom-big-font-mode'; use this for
+;; - `doom-font' -- the primary font to use
+;; - `doom-variable-pitch-font' -- a non-monospace font (where applicable)
+;; - `doom-big-font' -- used for `doom-big-font-mode'; use this for
 ;;   presentations or streaming.
+;; - `doom-unicode-font' -- for unicode glyphs
+;; - `doom-serif-font' -- for the `fixed-pitch-serif' face
 ;;
-;; They all accept either a font-spec, font string ("Input Mono-12"), or xlfd
-;; font string. You generally only need these two:
-;; (setq doom-font (font-spec :family "monospace" :size 12 :weight 'semi-light)
-;;       doom-variable-pitch-font (font-spec :family "sans" :size 13))
+;; See 'C-h v doom-font' for documentation and more examples of what they
+;; accept. For example:
+;;
+;;(setq doom-font (font-spec :family "Fira Code" :size 12 :weight 'semi-light)
+;;      doom-variable-pitch-font (font-spec :family "Fira Sans" :size 13))
+;;
+;; If you or Emacs can't find your font, use 'M-x describe-font' to look them
+;; up, `M-x eval-region' to execute elisp code, and 'M-x doom/reload-font' to
+;; refresh your font settings. If Emacs still can't find your font, it likely
+;; wasn't installed correctly. Font issues are rarely Doom issues!
 
 ;; There are two ways to load a theme. Both assume the theme is installed and
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
-
 (setq doom-theme 'doom-nord
       doom-font (font-spec :family "Iosevka" :size 13)
       doom-big-font (font-spec :family "Iosevka" :size 16)
@@ -42,10 +49,10 @@
       select-enable-primary nil
       require-final-newline t
       next-line-add-newlines nil
-      ;;display-fill-column-indicator-character ?\u23b8
 
       projectile-project-search-path '("~/Projects/")
-      +ivy-buffer-preview t
+      projectile-indexing-method 'hybrid
+      org-directory "~/org/"
 
       ls-lisp-dirs-first t
       dired-listing-switches "-aBhl --group-directories-first" ; requires ls from 'coreutils' on macOS
@@ -72,27 +79,23 @@
 
 (defadvice! prompt-for-buffer (&rest _)
   :after '(evil-window-split evil-window-vsplit)
-  (+ivy/switch-buffer))
+  (+vertico/switch-workspace-buffer))
 
 (setq-default flycheck-disabled-checkers '(python-pylint))
-(setq +lookup-provider-url-alist
-      (cons '("Dash.app" dash-at-point "dash://%s") +lookup-provider-url-alist))
 
 (after! company
   (setq company-idle-delay 0
         company-dabbrev-downcase 0
         company-show-quick-access t))
 
-(add-to-list 'auto-mode-alist '("\\.rml\\'" . web-mode))
-
 (defun web-mode-better-self-closing-indent (&rest _)
   (setq web-mode-attr-indent-offset nil))
 (add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
 (add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
 
-(after! 'c++-mode
-  (lsp-deferred)
-  (platformio-conditionally-enable))
+;; (after! 'c++-mode
+;;   (lsp-deferred)
+;;   (platformio-conditionally-enable))
 
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-pyright-disable-language-services nil
@@ -100,14 +103,6 @@
       lsp-log-io nil
       lsp-enable-file-watchers nil
       lsp-restart 'auto-restart)
-
-
-(setq projectile-project-root-files #'(".projectile" ".git")
-      projectile-indexing-method 'hybrid
-      projectile-project-root-functions #'(projectile-root-top-down
-                                           projectile-root-top-down-recurring
-                                           projectile-root-bottom-up
-                                           projectile-root-local))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -124,7 +119,20 @@
    (sql . nil)
    (sqlite . t)))
 
-;; Here are some additional functions/macros that could help you configure Doom:
+;; Whenever you reconfigure a package, make sure to wrap your config in an
+;; `after!' block, otherwise Doom's defaults may override your settings. E.g.
+;;
+;;   (after! PACKAGE
+;;     (setq x y))
+;;
+;; The exceptions to this rule:
+;;
+;;   - Setting file/directory variables (like `org-directory')
+;;   - Setting variables which explicitly tell you to set them before their
+;;     package is loaded (see 'C-h v VARIABLE' to look up their documentation).
+;;   - Setting doom variables (which start with 'doom-' or '+').
+;;
+;; Here are some additional functions/macros that will help you configure Doom.
 ;;
 ;; - `load!' for loading external *.el files relative to this one
 ;; - `use-package!' for configuring packages
@@ -137,6 +145,8 @@
 ;; To get information about any of these functions/macros, move the cursor over
 ;; the highlighted symbol at press 'K' (non-evil users must press 'C-c c k').
 ;; This will open documentation for it, including demos of how they are used.
+;; Alternatively, use `C-h o' to look up a symbol (functions, variables, faces,
+;; etc).
 ;;
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
@@ -149,4 +159,5 @@
 
 (unless (display-graphic-p)
   (custom-set-faces! '(default :background "default"))
+  (custom-theme-set-faces! 'doom-plain-dark '(default :background "default"))
   (custom-theme-set-faces! 'doom-nord '(default :background "default")))
