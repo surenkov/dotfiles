@@ -49,18 +49,16 @@
 ;; ...Or *all* packages (NOT RECOMMENDED; will likely break things)
 ;(unpin! t)
 
-;(package! company-tabnine)
-;(package! vue-mode)
-
 (package! blacken)
 (package! dash-at-point)
 
 (package! nvm)
-(package! xclip)
-;(package! platformio-mode)
 (package! hledger-mode)
-(package! logview)
 (package! bazel)
+;(package! xclip)
+;(package! platformio-mode)
+;(package! company-tabnine)
+;(package! vue-mode)
 
 ;(unpin! eglot)
 ;(unpin! erlang)

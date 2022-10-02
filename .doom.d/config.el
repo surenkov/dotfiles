@@ -46,7 +46,7 @@
 
       show-trailing-whitespace t
       select-enable-clipboard t
-      select-enable-primary nil
+      select-enable-primary t
       require-final-newline t
       next-line-add-newlines nil
 
@@ -59,7 +59,8 @@
       dired-dwim-target t)
 
 (unless (display-graphic-p)
-  (xterm-mouse-mode 1))                    ; Enable mouse suport in terminal
+  (xterm-mouse-mode 1))
+
 (global-set-key [mouse-4] (lambda () (interactive) (scroll-down 4)))
 (global-set-key [mouse-5] (lambda () (interactive) (scroll-up 4)))
 (global-set-key [S-mouse-4] (lambda () (interactive) (scroll-down 1)))

@@ -17,12 +17,16 @@ Installation steps:
 4. ...
 5. PROFIT!
 
-### zsh + [oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh)
+### zsh [+ oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh)
 Useful plugins:
 * [Spaceship Theme]( https://github.com/denysdovhan/spaceship-prompt )
 * [zsh-autosuggestions ](https://github.com/zsh-users/zsh-autosuggestions)
 * [zsh-completions](https://github.com/zsh-users/zsh-completions)
   * [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting)
+  
+  
+### fish [+ oh-my-fish](https://github.com/oh-my-fish/oh-my-fish)
+* `omf install pyenv nvm fzf`
 
 ### Aacritty
 symlink `alacritty.yml` to `~/.config/alacritty/alacritty.yml`;

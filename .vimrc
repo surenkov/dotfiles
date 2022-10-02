@@ -60,11 +60,11 @@ call plug#begin('~/.vim/plugged')
 " Themes
 Plug 'Raimondi/delimitMate'
 Plug 'cocopon/iceberg.vim'
-Plug 'arcticicestudio/nord-vim'
 Plug 'chriskempson/base16-vim'
 Plug 'rakr/vim-one'
 Plug 'vim-airline/vim-airline' "Status bar
 Plug 'vim-airline/vim-airline-themes' "Applicable themes
+Plug 'arcticicestudio/nord-vim'
 
 " Language Syntax Support
 Plug 'sheerun/vim-polyglot'
