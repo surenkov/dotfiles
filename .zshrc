@@ -6,12 +6,12 @@ export VISUAL='nvim'
 export EDITOR="$VISUAL"
 export GIT_EDITOR='$VISUAL'
 export GPG_TTY=`tty`
+# export DOCKER_HOST=$(limactl list default --format 'unix://{{.Dir}}/sock/docker.sock')
 
 alias vim=nvim
 alias em="$VISUAL"
 alias htop="TERM=xterm htop"
 alias ipy=ipython3
-
 
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"

@@ -33,9 +33,9 @@
 ;; available. You can either set `doom-theme' or manually load a theme with the
 ;; `load-theme' function. This is the default:
 (setq doom-theme 'doom-nord
-      doom-font (font-spec :family "Iosevka" :size 13)
-      doom-big-font (font-spec :family "Iosevka" :size 16)
-      doom-variable-pitch-font (font-spec :family "Iosevka" :size 14)
+      doom-font (font-spec :family "Iosevka Slab" :size 14)
+      doom-big-font (font-spec :family "Iosevka Slab" :size 16)
+      doom-variable-pitch-font (font-spec :family "Iosevka Slab" :size 14)
 
       truncate-string-ellipsis "…"
       scroll-margin 3
@@ -82,8 +82,6 @@
   :after '(evil-window-split evil-window-vsplit)
   (+vertico/switch-workspace-buffer))
 
-(setq-default flycheck-disabled-checkers '(python-pylint))
-
 (after! company
   (setq company-idle-delay 0
         company-dabbrev-downcase 0
@@ -99,11 +97,23 @@
 ;;   (platformio-conditionally-enable))
 
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
-      lsp-pyright-disable-language-services nil
-      lsp-pyright-disable-organize-imports nil
+      lsp-diagnostics-provider :auto
+      ;lsp-pyright-disable-language-services nil
+      ;lsp-pyright-disable-organize-imports nil
       lsp-log-io nil
+      lsp-idle-delay 0.500
+      lsp-use-plists t
+      read-process-output-max (* 1024 1024)
       lsp-enable-file-watchers nil
       lsp-restart 'auto-restart)
+
+(after! lsp
+  (advice-add #'add-node-modules-path :override #'ignore))
+
+;; (after! eglot
+;;   (add-to-list 'eglot-server-programs '(python-mode . ("pyright-langserver" "--stdio")))
+;;   (add-to-list 'eglot-server-programs '(typescript-mode . ("vscode-eslint-language-server" "--stdio")))
+;;   (advice-add #'add-node-modules-path :override #'ignore))
 
 (org-babel-do-load-languages
  'org-babel-load-languages

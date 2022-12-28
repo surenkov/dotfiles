@@ -55,10 +55,13 @@
 (package! nvm)
 (package! hledger-mode)
 (package! bazel)
+(package! lsp-ui :disable t)
+(package! protobuf-mode)
+(package! ts-fold)
+
 ;(package! xclip)
 ;(package! platformio-mode)
 ;(package! company-tabnine)
 ;(package! vue-mode)
 
-;(unpin! eglot)
 ;(unpin! erlang)

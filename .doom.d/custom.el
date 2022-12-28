@@ -4,6 +4,7 @@
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(ignored-local-variable-values '((checkdoc-package-keywords-flag)))
+ '(package-selected-packages '(eglot))
  '(safe-local-variable-values '((eval progn (pp-buffer) (indent-buffer)))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
