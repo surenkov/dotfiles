@@ -1,8 +1,8 @@
 set fish_greeting
 
-set -gxp PATH        $HOME/.local/bin $HOME/.bin /usr/local/bin /usr/local/opt/findutils/libexec/gnubin $HOME/.emacs.d/bin
+set BREW_HOME       /opt/homebrew
+set -gxp PATH        $HOME/.local/bin $HOME/.bin $BREW_HOME/bin $BREW_HOME/opt/findutils/libexec/gnubin /usr/local/bin $HOME/.emacs.d/bin
 set -gx  PYENV_ROOT  $HOME/.pyenv
-set -gx  REBAR_ROOT  $HOME/.cache/rebar3
 set -gx  GOPATH      $HOME/go
 set -gx  NVM_DIR     $HOME/.nvm
 set -gx DOCKER_HOST  unix://$HOME/.lima/default/sock/docker.sock
@@ -16,9 +16,10 @@ set -gx LANGUAGE    en_US.UTF-8
 set -gx EDITOR         nvim
 set -gx LSP_USE_PLISTS true
 
+set -gx DOCKER_BUILDKIT 1
+
 pyenv init - | source
 direnv hook fish | source
-thefuck --alias | source
 
 alias emc='emacsclient -t'
 alias emd='emacs -nw --daemon'

@@ -56,7 +56,8 @@
 
       ls-lisp-dirs-first t
       dired-listing-switches "-aBhl --group-directories-first" ; requires ls from 'coreutils' on macOS
-      dired-dwim-target t)
+      dired-dwim-target t
+      )
 
 (unless (display-graphic-p)
   (xterm-mouse-mode 1))
@@ -72,9 +73,8 @@
 
 (setq-default cursor-type 'hollow)
 
-(when (eq system-type 'darwin) ;; mac specific settings
-  (setq mac-command-modifier 'meta
-        insert-directory-program "/usr/local/bin/gls"))
+(cond (IS-MAC ;; mac specific settings
+  (setq insert-directory-program "/usr/local/bin/gls")))
 
 (add-hook! (prog-mode conf-mode text-mode) #'display-fill-column-indicator-mode)
 
