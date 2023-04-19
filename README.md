@@ -2,7 +2,7 @@
 Useful configs (vim, zsh) of mine
 
 ### Emacs
-1. Install [Doom Emacs](https://github.com/hlissner/doom-emacs)
+1. Install [Doom Emacs](https://github.com/doomemacs/doomemacs)
 1. Symlink `.doom.d` to your home path
 2. Run `doom sync`
 1. Profit!
