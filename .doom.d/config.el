@@ -74,7 +74,7 @@
 (setq-default cursor-type 'hollow)
 
 (cond (IS-MAC ;; mac specific settings
-  (setq insert-directory-program "/usr/local/bin/gls")))
+       (setq insert-directory-program "/usr/local/bin/gls")))
 
 (add-hook! (prog-mode conf-mode text-mode) #'display-fill-column-indicator-mode)
 
@@ -98,8 +98,8 @@
 
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-diagnostics-provider :auto
-      ;lsp-pyright-disable-language-services nil
-      ;lsp-pyright-disable-organize-imports nil
+                                        ;lsp-pyright-disable-language-services nil
+                                        ;lsp-pyright-disable-organize-imports nil
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
@@ -129,6 +129,20 @@
    (sh . t)
    (sql . nil)
    (sqlite . t)))
+
+(use-package! hydra
+  :defer
+  :config
+  (defhydra hydra/evil-window-resize (:color red)
+    "Resize window"
+    ("h" evil-window-decrease-width "decrease width")
+    ("j" evil-window-decrease-height "decrease height")
+    ("k" evil-window-increase-height "increase height")
+    ("l" evil-window-increase-width "increase width")
+    ("q" nil "quit")))
+(map! :leader
+      :prefix ("w" . "window")
+      :n "r" #'hydra/evil-window-resize/body)
 
 ;; Whenever you reconfigure a package, make sure to wrap your config in an
 ;; `after!' block, otherwise Doom's defaults may override your settings. E.g.
