@@ -25,6 +25,4 @@ alias emc='emacsclient -t'
 alias emd='emacs -nw --daemon'
 alias emstop="emacsclient -e '(kill-emacs)'"
 alias vim=nvim
-alias pgstart="brew services run postgresql@14"
-alias pgstop="brew services stop postgresql@14"
 alias ipy=ipython3
