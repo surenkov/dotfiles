@@ -56,8 +56,7 @@
 
       ls-lisp-dirs-first t
       dired-listing-switches "-aBhl --group-directories-first" ; requires ls from 'coreutils' on macOS
-      dired-dwim-target t
-      )
+      dired-dwim-target t)
 
 (unless (display-graphic-p)
   (xterm-mouse-mode 1))
