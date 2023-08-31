@@ -61,13 +61,6 @@
 (unless (display-graphic-p)
   (xterm-mouse-mode 1))
 
-(global-set-key [mouse-4] (lambda () (interactive) (scroll-down 4)))
-(global-set-key [mouse-5] (lambda () (interactive) (scroll-up 4)))
-(global-set-key [S-mouse-4] (lambda () (interactive) (scroll-down 1)))
-(global-set-key [S-mouse-5] (lambda () (interactive) (scroll-up 1)))
-(global-set-key [C-mouse-4] (lambda () (interactive) (scroll-down)))
-(global-set-key [C-mouse-5] (lambda () (interactive) (scroll-up)))
-
 (global-subword-mode 1)                 ; Iterate through CamelCase words
 
 (setq-default cursor-type 'hollow)
@@ -77,28 +70,21 @@
 
 (add-hook! (prog-mode conf-mode text-mode) #'display-fill-column-indicator-mode)
 
-(defadvice! prompt-for-buffer (&rest _)
-  :after '(evil-window-split evil-window-vsplit)
-  (+vertico/switch-workspace-buffer))
-
 (after! company
   (setq company-idle-delay 0
         company-dabbrev-downcase 0
         company-show-quick-access t))
+
+(after! doom-modeline ;; modeline icons are currently interfering with lsp (somehow)
+  (setq doom-modeline-icon nil))
 
 (defun web-mode-better-self-closing-indent (&rest _)
   (setq web-mode-attr-indent-offset nil))
 (add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
 (add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
 
-;; (after! 'c++-mode
-;;   (lsp-deferred)
-;;   (platformio-conditionally-enable))
-
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-diagnostics-provider :auto
-                                        ;lsp-pyright-disable-language-services nil
-                                        ;lsp-pyright-disable-organize-imports nil
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
@@ -108,11 +94,6 @@
 
 (after! lsp
   (advice-add #'add-node-modules-path :override #'ignore))
-
-;; (after! eglot
-;;   (add-to-list 'eglot-server-programs '(python-mode . ("pyright-langserver" "--stdio")))
-;;   (add-to-list 'eglot-server-programs '(typescript-mode . ("vscode-eslint-language-server" "--stdio")))
-;;   (advice-add #'add-node-modules-path :override #'ignore))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
