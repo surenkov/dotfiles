@@ -36,11 +36,14 @@
       doom-font (font-spec :family "Iosevka Slab" :size 14)
       doom-big-font (font-spec :family "Iosevka Slab" :size 16)
       doom-variable-pitch-font (font-spec :family "Iosevka Slab" :size 14)
+      doom-themes-enable-italic t
+      ;;doom-themes-padded-modeline t
 
       truncate-string-ellipsis "…"
       scroll-margin 3
       evil-want-fine-undo t
       undo-limit 8000000
+      shell-file-name (executable-find "bash")
 
       display-line-numbers-type 'relative
 
@@ -63,7 +66,9 @@
 
 (global-subword-mode 1)                 ; Iterate through CamelCase words
 
-(setq-default cursor-type 'hollow)
+(setq-default cursor-type 'hollow
+              vterm-shell (executable-find "fish")
+              explicit-shell-file-name (executable-find "fish"))
 
 (cond (IS-MAC ;; mac specific settings
        (setq insert-directory-program "/usr/local/bin/gls")))
@@ -73,6 +78,7 @@
 (after! company
   (setq company-idle-delay 0
         company-dabbrev-downcase 0
+        company-require-match nil
         company-show-quick-access t))
 
 (after! doom-modeline ;; modeline icons are currently interfering with lsp (somehow)

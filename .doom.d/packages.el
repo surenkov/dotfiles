@@ -56,11 +56,11 @@
 (package! hledger-mode)
 (package! bazel)
 (package! protobuf-mode)
-;(package! ts-fold)
 (package! polymode)
-;(package! codeium :recipe (:host github :repo "Exafunction/codeium.el"))
+(package! cape)
 
-(unpin! tree-sitter tree-sitter-langs evil-textobj-tree-sitter lsp-mode lsp-ui)
+;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
+(unpin! lsp-mode lsp-ui)
 (unpin! vertico embark)
 
 ;(package! platformio-mode)

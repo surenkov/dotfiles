@@ -5,7 +5,6 @@ set -gxp PATH        $HOME/.local/bin $HOME/.bin $BREW_HOME/bin $BREW_HOME/opt/f
 set -gx  PYENV_ROOT  $HOME/.pyenv
 set -gx  GOPATH      $HOME/go
 set -gx  NVM_DIR     $HOME/.nvm
-set -gx DOCKER_HOST  unix://$HOME/.lima/default/sock/docker.sock
 
 set -gxp PATH       $GOPATH/bin $PYENV_ROOT/bin $REBAR_ROOT/bin
 
@@ -15,8 +14,8 @@ set -gx LANGUAGE    en_US.UTF-8
 
 set -gx EDITOR         nvim
 set -gx LSP_USE_PLISTS true
-
-set -gx DOCKER_BUILDKIT 1
+set -gx GDAL_LIBRARY_PATH "$(gdal-config --prefix)/lib/libgdal.dylib"
+set -gx GEOS_LIBRARY_PATH "$(geos-config --prefix)/lib/libgeos_c.dylib"
 
 pyenv init - | source
 direnv hook fish | source
