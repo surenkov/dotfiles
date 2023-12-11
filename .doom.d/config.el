@@ -37,7 +37,7 @@
       doom-big-font (font-spec :family "Iosevka Slab" :size 16)
       doom-variable-pitch-font (font-spec :family "Iosevka Slab" :size 14)
       doom-themes-enable-italic t
-      ;;doom-themes-padded-modeline t
+      doom-themes-padded-modeline t
 
       truncate-string-ellipsis "…"
       scroll-margin 3
@@ -100,6 +100,15 @@
 
 (after! lsp
   (advice-add #'add-node-modules-path :override #'ignore))
+
+;; accept completion from copilot and fallback to company
+(use-package! copilot
+  :hook ((prog-mode . copilot-mode)
+         (post-command . copilot-clear-overlay))
+  :bind (:map copilot-completion-map
+              ("C-i" . 'copilot-next-completion)
+              ("C-f" . 'copilot-accept-completion)
+              ("<right>" . 'copilot-accept-completion-by-line)))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -166,7 +175,8 @@
       :ne "C-o" #'evil-jump-backward
       :ne "SPC j" #'evilem-motion-find-char
       :ne "SPC f t" #'treemacs
-      :ne "g r" #'+lookup/references)
+      :ne "g r" #'+lookup/references
+      :ne "g i" #'+lookup/implementations)
 
 (unless (display-graphic-p)
   (custom-set-faces! '(default :background "default"))

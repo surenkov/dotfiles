@@ -49,7 +49,7 @@
 ;; ...Or *all* packages (NOT RECOMMENDED; will likely break things)
 ;(unpin! t)
 
-(package! blacken)
+;(package! blacken)
 (package! dash-at-point)
 
 (package! nvm)
@@ -59,9 +59,13 @@
 (package! polymode)
 (package! cape)
 
+(package! copilot
+  :recipe (:host github :repo "zerolfx/copilot.el" :files ("*.el" "dist")))
+
+
 ;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 (unpin! lsp-mode lsp-ui)
-(unpin! vertico embark)
+;; (unpin! vertico embark)
 
 ;(package! platformio-mode)
 ;(package! vue-mode)
