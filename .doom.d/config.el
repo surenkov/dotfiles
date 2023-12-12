@@ -102,13 +102,13 @@
   (advice-add #'add-node-modules-path :override #'ignore))
 
 ;; accept completion from copilot and fallback to company
-(use-package! copilot
-  :hook ((prog-mode . copilot-mode)
-         (post-command . copilot-clear-overlay))
-  :bind (:map copilot-completion-map
-              ("C-i" . 'copilot-next-completion)
-              ("C-f" . 'copilot-accept-completion)
-              ("<right>" . 'copilot-accept-completion-by-line)))
+;; (use-package! copilot
+;;   :hook (post-command . copilot-clear-overlay)
+;;   ;; :hook (prog-mode . copilot-mode)
+;;   :bind (:map copilot-completion-map
+;;               ("C-i" . 'copilot-next-completion)
+;;               ("C-f" . 'copilot-accept-completion)
+;;               ("<right>" . 'copilot-accept-completion-by-line)))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -171,12 +171,13 @@
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 
-(map! :ne "C-i" #'evil-jump-forward
-      :ne "C-o" #'evil-jump-backward
-      :ne "SPC j" #'evilem-motion-find-char
-      :ne "SPC f t" #'treemacs
-      :ne "g r" #'+lookup/references
-      :ne "g i" #'+lookup/implementations)
+(map! :n "C-i" #'evil-jump-forward
+      :n "C-o" #'evil-jump-backward
+      :n "SPC j" #'evilem-motion-find-char
+      :n "SPC f t" #'treemacs
+      :n "g r" #'+lookup/references
+      :n "g i" #'+lookup/implementations)
+      ;; :i "C-f" #'copilot-complete)
 
 (unless (display-graphic-p)
   (custom-set-faces! '(default :background "default"))

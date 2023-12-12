@@ -50,8 +50,8 @@
 ;(unpin! t)
 
 ;(package! blacken)
-(package! dash-at-point)
-
+;;(package! dash-at-point)
+;;
 (package! nvm)
 (package! hledger-mode)
 (package! bazel)
@@ -59,13 +59,13 @@
 (package! polymode)
 (package! cape)
 
-(package! copilot
-  :recipe (:host github :repo "zerolfx/copilot.el" :files ("*.el" "dist")))
+;; (package! copilot
+;;   :recipe (:host github :repo "zerolfx/copilot.el" :files ("*.el" "dist")))
 
 
 ;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 (unpin! lsp-mode lsp-ui)
-;; (unpin! vertico embark)
+(unpin! vertico embark)
 
 ;(package! platformio-mode)
 ;(package! vue-mode)
