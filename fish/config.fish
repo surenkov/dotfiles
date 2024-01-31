@@ -12,7 +12,9 @@ set -gx LC_ALL      en_US.UTF-8
 set -gx LANG        en_US.UTF-8
 set -gx LANGUAGE    en_US.UTF-8
 
-set -gx EDITOR         nvim
+set -gx EDITOR         hx
+set -gx VISUAL         hx
+
 set -gx LSP_USE_PLISTS true
 set -gx GDAL_LIBRARY_PATH "$(gdal-config --prefix)/lib/libgdal.dylib"
 set -gx GEOS_LIBRARY_PATH "$(geos-config --prefix)/lib/libgeos_c.dylib"

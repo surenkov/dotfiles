@@ -101,14 +101,9 @@
 (after! lsp
   (advice-add #'add-node-modules-path :override #'ignore))
 
-;; accept completion from copilot and fallback to company
-;; (use-package! copilot
-;;   :hook (post-command . copilot-clear-overlay)
-;;   ;; :hook (prog-mode . copilot-mode)
-;;   :bind (:map copilot-completion-map
-;;               ("C-i" . 'copilot-next-completion)
-;;               ("C-f" . 'copilot-accept-completion)
-;;               ("<right>" . 'copilot-accept-completion-by-line)))
+(use-package! gptel
+ :config
+ (setq! gptel-api-key (getenv "OPENAI_API_KEY")))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -176,8 +171,17 @@
       :n "SPC j" #'evilem-motion-find-char
       :n "SPC f t" #'treemacs
       :n "g r" #'+lookup/references
-      :n "g i" #'+lookup/implementations)
-      ;; :i "C-f" #'copilot-complete)
+      :n "g i" #'+lookup/implementations
+      :n "g D" #'+lookup/type-definition)
+
+;; Override existing keybindings
+(map! :map 'override
+      :n "SPC a i" #'gptel
+      :v "SPC a i" #'gptel-send)
+(map! :after gptel
+      :mode gptel-mode
+      :n "RET" #'gptel-send
+      :n "h" #'gptel-menu)
 
 (unless (display-graphic-p)
   (custom-set-faces! '(default :background "default"))
