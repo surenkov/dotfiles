@@ -70,7 +70,7 @@
               vterm-shell (executable-find "fish")
               explicit-shell-file-name (executable-find "fish"))
 
-(cond (IS-MAC ;; mac specific settings
+(cond ((featurep :system 'macos) ;; mac specific settings
        (setq insert-directory-program "/usr/local/bin/gls")))
 
 (add-hook! (prog-mode conf-mode text-mode) #'display-fill-column-indicator-mode)
@@ -102,8 +102,10 @@
   (advice-add #'add-node-modules-path :override #'ignore))
 
 (use-package! gptel
- :config
- (setq! gptel-api-key (getenv "OPENAI_API_KEY")))
+  :config
+  (setq! gptel-api-key (getenv "OPENAI_API_KEY"))
+  (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
+  (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -168,20 +170,17 @@
 
 (map! :n "C-i" #'evil-jump-forward
       :n "C-o" #'evil-jump-backward
-      :n "SPC j" #'evilem-motion-find-char
       :n "SPC f t" #'treemacs
+      :nv "SPC c J" #'consult-lsp-file-symbols
       :n "g r" #'+lookup/references
       :n "g i" #'+lookup/implementations
-      :n "g D" #'+lookup/type-definition)
+      :n "g D" #'+lookup/type-definition
+      :nv "SPC o c" #'gptel)
 
-;; Override existing keybindings
-(map! :map 'override
-      :n "SPC a i" #'gptel
-      :v "SPC a i" #'gptel-send)
 (map! :after gptel
       :mode gptel-mode
       :n "RET" #'gptel-send
-      :n "h" #'gptel-menu)
+      :n "?" #'gptel-menu)
 
 (unless (display-graphic-p)
   (custom-set-faces! '(default :background "default"))
