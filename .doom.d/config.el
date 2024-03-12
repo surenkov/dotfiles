@@ -103,7 +103,8 @@
 
 (use-package! gptel
   :config
-  (setq! gptel-api-key (getenv "OPENAI_API_KEY"))
+  (setq! gptel-api-key (getenv "OPENAI_API_KEY")
+         gptel-model "gpt-4-1106-preview")
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
   (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll))
 
@@ -171,10 +172,10 @@
 (map! :n "C-i" #'evil-jump-forward
       :n "C-o" #'evil-jump-backward
       :n "SPC f t" #'treemacs
-      :nv "SPC c J" #'consult-lsp-file-symbols
       :n "g r" #'+lookup/references
       :n "g i" #'+lookup/implementations
       :n "g D" #'+lookup/type-definition
+      :nv "SPC c F" #'consult-lsp-file-symbols
       :nv "SPC o c" #'gptel)
 
 (map! :after gptel

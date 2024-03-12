@@ -1,3 +1,5 @@
 .DS_Store
 .doom.d/custom.el
 **/secrets.*
+fish/fish_variables
+fish/functions/*
