@@ -58,10 +58,11 @@
 (package! polymode)
 (package! cape)
 (package! gptel)
+;(package! casual-dired)
 ;;
 ;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
-(unpin! lsp-mode lsp-ui)
-(unpin! vertico embark)
+;(unpin! lsp-mode lsp-ui)
+;(unpin! vertico embark)
 ;;
 ;(package! platformio-mode)
 ;(package! vue-mode)

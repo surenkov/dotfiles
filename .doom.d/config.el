@@ -104,7 +104,7 @@
 (use-package! gptel
   :config
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
-         gptel-model "gpt-4-1106-preview")
+         gptel-model "gpt-4-turbo")
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
   (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll))
 
