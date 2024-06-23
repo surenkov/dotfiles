@@ -1,6 +1,5 @@
 tap "d12frosted/emacs-plus"
 tap "homebrew/bundle"
-tap "homebrew/cask-fonts"
 tap "homebrew/services"
 brew "xz"
 brew "libtiff"

@@ -104,7 +104,11 @@
 (use-package! gptel
   :config
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
-         gptel-model "gpt-4-turbo")
+         gptel-expert-commands t
+         gptel-model "claude-3-5-sonnet-20240620"
+         gptel-backend (gptel-make-anthropic "Claude"
+                         :stream t
+                         :key (getenv "ANTHROPIC_API_KEY")))
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
   (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll))
 
@@ -176,7 +180,8 @@
       :n "g i" #'+lookup/implementations
       :n "g D" #'+lookup/type-definition
       :nv "SPC c F" #'consult-lsp-file-symbols
-      :nv "SPC o c" #'gptel)
+      :nv "SPC o c" #'gptel
+      :nv "SPC o C" #'gptel-menu)
 
 (map! :after gptel
       :mode gptel-mode
