@@ -91,6 +91,7 @@
 
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-diagnostics-provider :auto
+      lsp-pyright-multi-root nil
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
@@ -173,22 +174,37 @@
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 
-(map! :n "C-i" #'evil-jump-forward
-      :n "C-o" #'evil-jump-backward
-      :n "SPC f t" #'treemacs
-      :n "g r" #'+lookup/references
-      :n "g i" #'+lookup/implementations
-      :n "g D" #'+lookup/type-definition
+(map! :n "C-i"      #'evil-jump-forward
+      :n "C-o"      #'evil-jump-backward
+      :n "SPC f t"  #'treemacs
+      :n "g r"      #'+lookup/references
+      :n "g i"      #'+lookup/implementations
+      :n "g D"      #'+lookup/type-definition
       :nv "SPC c F" #'consult-lsp-file-symbols
       :nv "SPC o c" #'gptel
-      :nv "SPC o C" #'gptel-menu)
+      :nv "SPC o C" #'gptel-menu
+      :nv "SPC b a" #'gptel-add
+      :nv "SPC f a" #'gptel-add-file)
 
-(map! :after gptel
-      :mode gptel-mode
-      :n "RET" #'gptel-send
-      :n "?" #'gptel-menu)
+(after! gptel
+  (map! :mode gptel-mode
+        :n "RET"   #'gptel-send)
 
-(unless (display-graphic-p)
-  (custom-set-faces! '(default :background "default"))
-  (custom-theme-set-faces! 'doom-plain-dark '(default :background "default"))
-  (custom-theme-set-faces! 'doom-nord '(default :background "default")))
+  (map! :mode gptel-context-buffer-mode
+        :n "C-c C-c" #'gptel-context-confirm
+        :n "C-c C-k" #'gptel-context-quit
+        :n "RET"     #'gptel-context-visit
+        :n "n"       #'gptel-context-next
+        :n "p"       #'gptel-context-previous
+        :n "d"       #'gptel-context-flag-deletion))
+
+
+(if (display-graphic-p)
+    (progn
+      (custom-set-faces! '(default :background "#000000"))
+      (custom-theme-set-faces! 'doom-plain-dark '(default :background "#000000"))
+      (custom-theme-set-faces! 'doom-nord '(default :background "#000000")))
+    (progn
+      (custom-set-faces! '(default :background nil))
+      (custom-theme-set-faces! 'doom-plain-dark '(default :background nil))
+      (custom-theme-set-faces! 'doom-nord '(default :background nil))))
