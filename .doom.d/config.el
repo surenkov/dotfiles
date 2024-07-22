@@ -91,6 +91,7 @@
 
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-diagnostics-provider :auto
+      lsp-pyright-multi-root nil
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
@@ -105,12 +106,16 @@
   :config
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
          gptel-expert-commands t
-         gptel-model "claude-3-5-sonnet-20240620"
-         gptel-backend (gptel-make-anthropic "Claude"
-                         :stream t
-                         :key (getenv "ANTHROPIC_API_KEY")))
+         gptel-model "gpt-4o")
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
-  (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll))
+  (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
+  (gptel-make-anthropic "Claude"
+    :stream t
+    :key (getenv "ANTHROPIC_API_KEY"))
+  (gptel-make-ollama "Ollama"
+    :host "localhost:11434"
+    :stream t
+    :models '("llama3.1:8b" "gemma2:9b")))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -173,22 +178,37 @@
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 
-(map! :n "C-i" #'evil-jump-forward
-      :n "C-o" #'evil-jump-backward
-      :n "SPC f t" #'treemacs
-      :n "g r" #'+lookup/references
-      :n "g i" #'+lookup/implementations
-      :n "g D" #'+lookup/type-definition
+(map! :n "C-i"      #'evil-jump-forward
+      :n "C-o"      #'evil-jump-backward
+      :n "SPC f t"  #'treemacs
+      :n "g r"      #'+lookup/references
+      :n "g i"      #'+lookup/implementations
+      :n "g D"      #'+lookup/type-definition
       :nv "SPC c F" #'consult-lsp-file-symbols
       :nv "SPC o c" #'gptel
-      :nv "SPC o C" #'gptel-menu)
+      :nv "SPC o C" #'gptel-menu
+      :nv "SPC b a" #'gptel-add
+      :nv "SPC f a" #'gptel-add-file)
 
-(map! :after gptel
-      :mode gptel-mode
-      :n "RET" #'gptel-send
-      :n "?" #'gptel-menu)
+(after! gptel
+  (map! :mode gptel-mode
+        :n "RET"   #'gptel-send)
 
-(unless (display-graphic-p)
-  (custom-set-faces! '(default :background "default"))
-  (custom-theme-set-faces! 'doom-plain-dark '(default :background "default"))
-  (custom-theme-set-faces! 'doom-nord '(default :background "default")))
+  (map! :mode gptel-context-buffer-mode
+        :n "C-c C-c" #'gptel-context-confirm
+        :n "C-c C-k" #'gptel-context-quit
+        :n "RET"     #'gptel-context-visit
+        :n "n"       #'gptel-context-next
+        :n "p"       #'gptel-context-previous
+        :n "d"       #'gptel-context-flag-deletion))
+
+
+(if (display-graphic-p)
+    (progn
+      (custom-set-faces! '(default :background "#000000"))
+      (custom-theme-set-faces! 'doom-plain-dark '(default :background "#000000"))
+      (custom-theme-set-faces! 'doom-nord '(default :background "#000000")))
+  (progn
+    (custom-set-faces! '(default :background nil))
+    (custom-theme-set-faces! 'doom-plain-dark '(default :background nil))
+    (custom-theme-set-faces! 'doom-nord '(default :background nil))))
