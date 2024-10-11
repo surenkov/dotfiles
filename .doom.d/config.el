@@ -71,7 +71,7 @@
               explicit-shell-file-name (executable-find "fish"))
 
 (cond ((featurep :system 'macos) ;; mac specific settings
-       (setq insert-directory-program "/usr/local/bin/gls")))
+       (setq insert-directory-program "/opt/homebrew/bin/gls")))
 
 (add-hook! (prog-mode conf-mode text-mode) #'display-fill-column-indicator-mode)
 
@@ -80,6 +80,9 @@
         company-dabbrev-downcase 0
         company-require-match nil
         company-show-quick-access t))
+
+(after! corfu
+  (setq corfu-auto-delay 0.05))
 
 (after! doom-modeline ;; modeline icons are currently interfering with lsp (somehow)
   (setq doom-modeline-icon nil))
@@ -96,26 +99,34 @@
       lsp-idle-delay 0.500
       lsp-use-plists t
       read-process-output-max (* 1024 1024)
-      lsp-enable-file-watchers nil
+      lsp-enable-file-watchers t
       lsp-restart 'auto-restart)
 
-(after! lsp
+(after! lsp-mode
   (advice-add #'add-node-modules-path :override #'ignore))
+(after! dap-mode
+  (setq dap-python-debugger 'debugpy))
 
 (use-package! gptel
   :config
-  (setq! gptel-api-key (getenv "OPENAI_API_KEY")
-         gptel-expert-commands t
-         gptel-model "gpt-4o")
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
   (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
-  (gptel-make-anthropic "Claude"
+  (gptel-make-openai "Perplexity"
+    :host "api.perplexity.ai"
+    :key (getenv "PERPLEXITY_API_KEY")
+    :endpoint "/chat/completions"
     :stream t
-    :key (getenv "ANTHROPIC_API_KEY"))
+    :models '("llama-3.1-sonar-large-128k-online" "llama-3.1-sonar-huge-128k-online"))
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("llama3.1:8b" "gemma2:9b")))
+    :models '("llama3.1:8b" "gemma2:9b"))
+  (setq! gptel-api-key (getenv "OPENAI_API_KEY")
+         gptel-expert-commands t
+         gptel-backend (gptel-make-anthropic "Claude"
+                         :stream t
+                         :key (getenv "ANTHROPIC_API_KEY"))
+         gptel-model "claude-3-5-sonnet-20240620"))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -190,10 +201,13 @@
       :nv "SPC b a" #'gptel-add
       :nv "SPC f a" #'gptel-add-file)
 
+(map! :after transient
+      :map transient-map
+      [escape] #'transient-quit-one)
+
 (after! gptel
   (map! :mode gptel-mode
-        :n "RET"   #'gptel-send)
-
+        :n "RET"     #'gptel-send)
   (map! :mode gptel-context-buffer-mode
         :n "C-c C-c" #'gptel-context-confirm
         :n "C-c C-k" #'gptel-context-quit
@@ -202,13 +216,14 @@
         :n "p"       #'gptel-context-previous
         :n "d"       #'gptel-context-flag-deletion))
 
-
 (if (display-graphic-p)
     (progn
       (custom-set-faces! '(default :background "#000000"))
       (custom-theme-set-faces! 'doom-plain-dark '(default :background "#000000"))
-      (custom-theme-set-faces! 'doom-nord '(default :background "#000000")))
+      (custom-theme-set-faces! 'doom-nord '(default :background "#000000"))
+      (custom-set-faces! '(gptel-context-highlight-face :background "#2C333F")))
   (progn
     (custom-set-faces! '(default :background nil))
     (custom-theme-set-faces! 'doom-plain-dark '(default :background nil))
-    (custom-theme-set-faces! 'doom-nord '(default :background nil))))
+    (custom-theme-set-faces! 'doom-nord '(default :background nil))
+    (custom-set-faces! '(gptel-context-highlight-face :background "#2C333F"))))

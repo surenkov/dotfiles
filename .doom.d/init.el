@@ -21,12 +21,12 @@
        ;;layout            ; auie,ctsrnm is the superior home row
 
        :completion
-       (company +tng)           ; the ultimate code completion backend
-       ;;company
+       ;;(company +tng)      ; the ultimate code completion backend
+       (corfu +icons +orderless +dabbrev)  ; complete with cap(f), cape and a flying feather!
        ;;helm              ; the *other* search engine for love and life
        ;;ido               ; the other *other* search engine...
        ;;(ivy +fuzzy)               ; a search engine for love and life
-       vertico           ; the search engine of the future
+       (vertico +icons)           ; the search engine of the future
 
        :ui
        ;;deft              ; notational velocity for Emacs
@@ -53,7 +53,7 @@
        ;;zen               ; distraction-free coding or writing
 
        :editor
-       (evil +everywhere); come to the dark side, we have cookies
+       (evil +everywhere)              ; come to the dark side, we have cookies
        file-templates    ; auto-snippets for empty files
        fold              ; (nigh) universal code folding
        (format +lsp)  ; automated prettiness
@@ -67,7 +67,7 @@
        ;;word-wrap         ; soft wrapping with language-aware indent
 
        :emacs
-       (dired +ranger)             ; making dired pretty functional
+       (dired +dirvish)             ; making dired pretty functional
        electric          ; smarter, keyword-based electric-indent
        ibuffer         ; interactive buffer management
        (undo +tree)              ; persistent, smarter undo for your inevitable mistakes
@@ -87,7 +87,7 @@
        :tools
        ;;ansible
        ;;biblio            ; Writes a PhD for you (citation needed)
-       ;;(debugger +lsp)          ; FIXME stepping through code, to help you add bugs
+       (debugger +lsp)          ; FIXME stepping through code, to help you add bugs
        direnv
        docker
        editorconfig      ; let someone else argue about tabs vs spaces
@@ -103,7 +103,7 @@
        ;;terraform         ; infrastructure as code
        tmux              ; an API for interacting with tmux
        tree-sitter       ; syntax and parsing, sitting in a tree...
-       ;;upload            ; map local to remote projects via ssh/ftp
+       upload            ; map local to remote projects via ssh/ftp
 
        :os
        (:if (featurep :system 'macos) macos)  ; improve compatibility with macOS
@@ -119,12 +119,12 @@
        ;;crystal           ; ruby at the speed of c
        ;;csharp            ; unity, .NET, and mono shenanigans
        data                ; config/data formats
-       (dart +flutter)     ; paint ui and not much else
+       ;;(dart +flutter)     ; paint ui and not much else
        ;;dhall
        ;;elixir            ; erlang done right
        ;;elm               ; care for a cup of TEA?
        emacs-lisp          ; drown in parentheses
-       ;;erlang              ; an elegant language for a more civilized age
+       (erlang +lsp +tree-sitter)             ; an elegant language for a more civilized age
        ;;ess               ; emacs speaks statistics
        ;;factor
        ;;faust             ; dsp, but you get to keep your soul
@@ -133,7 +133,7 @@
        ;;fstar             ; (dependent) types and (monadic) effects and Z3
        ;;gdscript          ; the language you waited for
        (go +lsp +tree-sitter)           ; the hipster dialect
-       (graphql +lsp)      ; Give queries a REST
+       graphql      ; Give queries a REST
        ;;(haskell +lsp)    ; a language that's lazier than I am
        ;;hy                ; readability of scheme w/ speed of python
        ;;idris             ; a language you can depend on
@@ -171,7 +171,7 @@
        ;;terra             ; Earth and Moon in alignment for performance.
        (web +lsp +tree-sitter)               ; the tubes
        yaml              ; JSON, but readable
-       ;;zig               ; C, but simpler
+       (zig +lsp +tree-sitter)               ; C, but simpler
 
        :email
        ;;(mu4e +org +gmail)

@@ -49,21 +49,18 @@
 ;; ...Or *all* packages (NOT RECOMMENDED; will likely break things)
 ;(unpin! t)
 
-;; (package! dash-at-point)
-;;
 (package! nvm)
-;;(package! hledger-mode)
 (package! bazel)
 (package! protobuf-mode)
 (package! polymode)
-;;(package! cape)
 (package! gptel)
-;(package! k8s-mode)
-;(package! casual-dired)
-;;
-;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
+
+;;(package! dash-at-point)
+;;(package! hledger-mode)
+;;(package! k8s-mode)
+;;(package! vue-mode)
+;;(package! platformio-mode)
+
+;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 ;;(unpin! lsp-mode lsp-ui)
-;(unpin! vertico embark)
-;;
-;(package! platformio-mode)
-;(package! vue-mode)
+;;(unpin! vertico embark)
