@@ -62,5 +62,5 @@
 ;;(package! platformio-mode)
 
 ;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
-;;(unpin! lsp-mode lsp-ui)
+(unpin! lsp-mode lsp-ui)
 ;;(unpin! vertico embark)

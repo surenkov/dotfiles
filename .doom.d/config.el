@@ -95,17 +95,23 @@
 (setq lsp-disabled-clients '(flow-ls jsts-ls)
       lsp-diagnostics-provider :auto
       lsp-pyright-multi-root nil
+      lsp-ruff-ruff-args '("--preview")
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
       read-process-output-max (* 1024 1024)
       lsp-enable-file-watchers t
-      lsp-restart 'auto-restart)
+      lsp-restart 'auto-restart
+      lsp-enable-dap-auto-configure t)
 
 (after! lsp-mode
   (advice-add #'add-node-modules-path :override #'ignore))
+
 (after! dap-mode
-  (setq dap-python-debugger 'debugpy))
+  (setq dap-python-debugger 'debugpy)
+  (defun dap-python--pyenv-executable-find (command)
+    (executable-find "python")))
+
 
 (use-package! gptel
   :config
@@ -120,13 +126,14 @@
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("llama3.1:8b" "gemma2:9b"))
+    :models '("llama3.1:8b" "llama3.2:3b" "cas/ministral-8b-instruct-2410_q4km:latest"))
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
          gptel-expert-commands t
          gptel-backend (gptel-make-anthropic "Claude"
                          :stream t
                          :key (getenv "ANTHROPIC_API_KEY"))
-         gptel-model "claude-3-5-sonnet-20240620"))
+         gptel-model 'claude-3-5-sonnet-20241022
+         gptel-default-mode 'org-mode))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
@@ -216,14 +223,18 @@
         :n "p"       #'gptel-context-previous
         :n "d"       #'gptel-context-flag-deletion))
 
+(custom-set-faces!
+  '(gptel-context-highlight-face :background "#2C333F")
+  '(line-number :italic nil)
+  '(line-number-current-line :italic nil)
+  '(ts-fold-replacement-face :foreground nil :box nil :inherit font-lock-comment-face :weight light))
+
 (if (display-graphic-p)
     (progn
       (custom-set-faces! '(default :background "#000000"))
       (custom-theme-set-faces! 'doom-plain-dark '(default :background "#000000"))
-      (custom-theme-set-faces! 'doom-nord '(default :background "#000000"))
-      (custom-set-faces! '(gptel-context-highlight-face :background "#2C333F")))
+      (custom-theme-set-faces! 'doom-nord '(default :background "#000000")))
   (progn
     (custom-set-faces! '(default :background nil))
     (custom-theme-set-faces! 'doom-plain-dark '(default :background nil))
-    (custom-theme-set-faces! 'doom-nord '(default :background nil))
-    (custom-set-faces! '(gptel-context-highlight-face :background "#2C333F"))))
+    (custom-theme-set-faces! 'doom-nord '(default :background nil))))
