@@ -108,10 +108,14 @@
   (advice-add #'add-node-modules-path :override #'ignore))
 
 (after! dap-mode
+  (add-hook! 'dap-stopped-hook
+    (lambda (arg) (call-interactively #'dap-hydra))))
+
+(after! (python dap-mode)
+  (require 'dap-python)
   (setq dap-python-debugger 'debugpy)
   (defun dap-python--pyenv-executable-find (command)
     (executable-find "python")))
-
 
 (use-package! gptel
   :config
@@ -127,6 +131,8 @@
     :host "localhost:11434"
     :stream t
     :models '("llama3.1:8b" "llama3.2:3b" "cas/ministral-8b-instruct-2410_q4km:latest"))
+  (gptel-make-kagi "Kagi"
+      :key (getenv "KAGI_API_TOKEN"))
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
          gptel-expert-commands t
          gptel-backend (gptel-make-anthropic "Claude"

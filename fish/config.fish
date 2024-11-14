@@ -1,7 +1,7 @@
 set fish_greeting
 
 set BREW_HOME /opt/homebrew
-set -gxp PATH $HOME/.local/bin $HOME/.bin $BREW_HOME/bin /usr/local/bin $HOME/.config/emacs/bin $HOME/.cargo/bin
+set -gxp PATH $HOME/.local/bin $HOME/.bin $BREW_HOME/bin $BREW_HOME/opt/llvm/bin /usr/local/bin $HOME/.config/emacs/bin $HOME/.cargo/bin
 
 set -gx PYENV_ROOT $HOME/.pyenv
 set -gx GOPATH $HOME/go
