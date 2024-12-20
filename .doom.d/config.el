@@ -121,24 +121,21 @@
   :config
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
   (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
-  (gptel-make-openai "Perplexity"
-    :host "api.perplexity.ai"
-    :key (getenv "PERPLEXITY_API_KEY")
-    :endpoint "/chat/completions"
+  (gptel-make-anthropic "Claude"
     :stream t
-    :models '("llama-3.1-sonar-large-128k-online" "llama-3.1-sonar-huge-128k-online"))
+    :key (getenv "ANTHROPIC_API_KEY"))
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("llama3.1:8b" "llama3.2:3b" "cas/ministral-8b-instruct-2410_q4km:latest"))
+    :models '("llama3.1:8b" "llama3.2:3b" "qwen2.5-coder:14b" "exaone3.5:7.8b"))
   (gptel-make-kagi "Kagi"
       :key (getenv "KAGI_API_TOKEN"))
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
          gptel-expert-commands t
-         gptel-backend (gptel-make-anthropic "Claude"
-                         :stream t
-                         :key (getenv "ANTHROPIC_API_KEY"))
-         gptel-model 'claude-3-5-sonnet-20241022
+         gptel-backend (gptel-make-gemini "Gemini"
+                           :stream t
+                           :key (getenv "GOOGLE_API_KEY"))
+         gptel-model 'gemini-exp-1206
          gptel-default-mode 'org-mode))
 
 (org-babel-do-load-languages
