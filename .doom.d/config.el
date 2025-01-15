@@ -113,6 +113,7 @@
 
 (after! (python dap-mode)
   (require 'dap-python)
+  (require 'dap-lldb)
   (setq dap-python-debugger 'debugpy)
   (defun dap-python--pyenv-executable-find (command)
     (executable-find "python")))
@@ -127,7 +128,7 @@
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("llama3.1:8b" "llama3.2:3b" "qwen2.5-coder:14b" "exaone3.5:7.8b"))
+    :models '("llama3.1:8b" "llama3.2:3b" "qwen2.5-coder:14b" "qwen2.5-coder:32b" "phi4"))
   (gptel-make-kagi "Kagi"
       :key (getenv "KAGI_API_TOKEN"))
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
