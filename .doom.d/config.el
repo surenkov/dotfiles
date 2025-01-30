@@ -128,7 +128,7 @@
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("llama3.1:8b" "llama3.2:3b" "qwen2.5-coder:14b" "qwen2.5-coder:32b" "phi4"))
+    :models '("llama3.1:8b" "llama3.2:3b" "qwen2.5-coder:14b" "deepseek-r1:32b" "phi4"))
   (gptel-make-kagi "Kagi"
       :key (getenv "KAGI_API_TOKEN"))
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
@@ -207,8 +207,8 @@
       :n "g i"      #'+lookup/implementations
       :n "g D"      #'+lookup/type-definition
       :nv "SPC c F" #'consult-lsp-file-symbols
-      :nv "SPC o c" #'gptel
-      :nv "SPC o C" #'gptel-menu
+      :nv "SPC o C" #'gptel
+      :nv "SPC o c" #'gptel-menu
       :nv "SPC b a" #'gptel-add
       :nv "SPC f a" #'gptel-add-file)
 

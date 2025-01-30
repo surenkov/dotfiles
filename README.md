@@ -28,6 +28,11 @@ Useful plugins:
 ### fish [+ oh-my-fish](https://github.com/oh-my-fish/oh-my-fish)
 * `omf install pyenv nvm fzf`
 
+
+### Ghostty
+symlink `./ghostty` to `~/.config/ghostty`;
+
+
 ### Aacritty
 symlink `alacritty.yml` to `~/.config/alacritty/alacritty.yml`;
 
