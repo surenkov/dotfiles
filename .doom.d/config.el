@@ -46,6 +46,7 @@
       shell-file-name (executable-find "bash")
 
       display-line-numbers-type 'relative
+      transient-show-during-minibuffer-read t
 
       show-trailing-whitespace t
       select-enable-clipboard t
@@ -120,6 +121,7 @@
 
 (use-package! gptel
   :config
+  (setq gptel-expert-commands t)
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
   (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
   (gptel-make-anthropic "Claude"
@@ -136,7 +138,7 @@
          gptel-backend (gptel-make-gemini "Gemini"
                            :stream t
                            :key (getenv "GOOGLE_API_KEY"))
-         gptel-model 'gemini-exp-1206
+         gptel-model 'gemini-2.0-pro-exp-02-05
          gptel-default-mode 'org-mode))
 
 (org-babel-do-load-languages
@@ -240,5 +242,6 @@
       (custom-theme-set-faces! 'doom-nord '(default :background "#000000")))
   (progn
     (custom-set-faces! '(default :background nil))
+    (custom-set-faces! '(ein:basecell-input-area-face :background nil))
     (custom-theme-set-faces! 'doom-plain-dark '(default :background nil))
     (custom-theme-set-faces! 'doom-nord '(default :background nil))))
