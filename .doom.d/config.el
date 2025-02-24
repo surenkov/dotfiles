@@ -124,21 +124,39 @@
   (setq gptel-expert-commands t)
   (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
   (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
-  (gptel-make-anthropic "Claude"
-    :stream t
-    :key (getenv "ANTHROPIC_API_KEY"))
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
     :models '("llama3.1:8b" "llama3.2:3b" "qwen2.5-coder:14b" "deepseek-r1:32b" "phi4"))
-  (gptel-make-kagi "Kagi"
-      :key (getenv "KAGI_API_TOKEN"))
+  (gptel-make-gemini "Gemini"
+    :stream t
+    :key (getenv "GOOGLE_GENAI_API_KEY"))
+  (gptel-make-anthropic "Claude"
+    :stream t
+    :key (getenv "ANTHROPIC_API_KEY"))
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
          gptel-expert-commands t
-         gptel-backend (gptel-make-gemini "Gemini"
-                           :stream t
-                           :key (getenv "GOOGLE_API_KEY"))
-         gptel-model 'gemini-2.0-pro-exp-02-05
+         gptel-max-tokens 32768
+         gptel-backend (gptel-make-anthropic "Claude-Thinking"
+                         :stream t
+                         :key (getenv "ANTHROPIC_API_KEY")
+                         :models '((claude-3-7-sonnet-latest
+                                    :description "Highest level of intelligence and capability"
+                                    :capabilities (media tool-use cache)
+                                    :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
+                                    :context-window 200
+                                    :input-cost 3
+                                    :output-cost 15
+                                    :cutoff-date "2024-11"))
+                         :request-params '(:thinking (:type "enabled" :budget_tokens 16384))
+                         :header (lambda () (when-let* ((key (gptel--get-api-key)))
+                                              `(("x-api-key" . ,key)
+                                                ("anthropic-version" . "2023-06-01")
+                                                ("anthropic-beta" . "pdfs-2024-09-25")
+                                                ("anthropic-beta" . "output-128k-2025-02-19")
+                                                ("anthropic-beta" . "prompt-caching-2024-07-31")))))
+         ;; gptel-model 'gemini-2.0-pro-exp-02-05
+         gptel-model 'claude-3-7-sonnet-latest
          gptel-default-mode 'org-mode))
 
 (org-babel-do-load-languages

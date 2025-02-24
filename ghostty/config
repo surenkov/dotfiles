@@ -58,8 +58,8 @@ cursor-style-blink = true
 # font
 font-family = "Iosevka Term Slab"
 font-size = 15
-font-thicken = 1
-font-thicken-strength = 128
+font-thicken = true
+font-thicken-strength = 0
 font-feature = calt
 font-feature = -dlig
 

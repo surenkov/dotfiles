@@ -65,5 +65,3 @@
 ;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 ;;(unpin! lsp-mode lsp-ui dap-mode)
 ;;(unpin! vertico embark)
-;;(package! transient :pin "00fabc76")
-;;(package! magit :pin "7adad8c8")

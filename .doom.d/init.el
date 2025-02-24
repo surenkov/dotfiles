@@ -69,6 +69,7 @@
        :emacs
        (dired +dirvish)             ; making dired pretty functional
        electric          ; smarter, keyword-based electric-indent
+       ;;eww               ; the internet is gross
        ibuffer         ; interactive buffer management
        (undo +tree)              ; persistent, smarter undo for your inevitable mistakes
        vc                ; version-control and Emacs, sitting in a tree
@@ -87,6 +88,7 @@
        :tools
        ;;ansible
        ;;biblio            ; Writes a PhD for you (citation needed)
+       ;;collab            ; buffers with friends
        (debugger +lsp)          ; FIXME stepping through code, to help you add bugs
        direnv
        docker
@@ -95,9 +97,9 @@
        (eval +overlay)     ; run code, run (also, repls)
        (lookup +dictionary)              ; navigate your code and its documentation
        (lsp +peek)               ; M-x vscode
-       (magit +forge)             ; a git porcelain for Emacs
+       magit             ; a git porcelain for Emacs
        make              ; run make tasks from Emacs
-       ;; pass              ; password manager for nerds
+       ;;pass              ; password manager for nerds
        ;;pdf               ; pdf enhancements
        ;;prodigy           ; FIXME managing external services & code builders
        ;;terraform         ; infrastructure as code
@@ -124,7 +126,7 @@
        ;;elixir            ; erlang done right
        ;;elm               ; care for a cup of TEA?
        emacs-lisp          ; drown in parentheses
-       (erlang +lsp +tree-sitter)             ; an elegant language for a more civilized age
+       erlang             ; an elegant language for a more civilized age
        ;;ess               ; emacs speaks statistics
        ;;factor
        ;;faust             ; dsp, but you get to keep your soul
@@ -153,13 +155,14 @@
        (org +pretty +journal -dragndrop +present +pretty +brain +roam2)               ; organize your plain life in plain text
        ;;php               ; perl's insecure younger brother
        ;;plantuml          ; diagrams for confusing people more
+       ;;graphviz          ; diagrams for confusing yourself even more
        ;;purescript        ; javascript, but functional
        (python +lsp +pyright +pyenv +cython +tree-sitter)            ; beautiful is better than ugly
        ;;qt                ; the 'cutest' gui framework ever
        ;;racket            ; a DSL for DSLs
        ;;raku              ; the artist formerly known as perl6
-       ;;rest              ; Emacs as a REST client
-       ;;rst               ; ReST in peace
+       rest              ; Emacs as a REST client
+       rst               ; ReST in peace
        (ruby +rails)     ; 1.step {|i| p "Ruby is #{i.even? ? 'love' : 'life'}"}
        (rust +lsp +tree-sitter)       ; Fe2O3.unwrap().unwrap().unwrap().unwrap()
        ;;scala             ; java, but good
@@ -184,7 +187,6 @@
        everywhere        ; *leave* Emacs!? You must be joking
        ;;irc               ; how neckbeards socialize
        (rss +org)        ; emacs as an RSS reader
-       ;;twitter           ; twitter client https://twitter.com/vnought
 
        :config
        ;;literate
