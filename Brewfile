@@ -1,7 +1,7 @@
 tap "d12frosted/emacs-plus"
-tap "fish-shell/fish-beta-4"
 tap "homebrew/bundle"
 tap "homebrew/services"
+brew "llvm"
 brew "awscli"
 brew "bat"
 brew "coreutils"
