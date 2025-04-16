@@ -28,4 +28,3 @@ alias emstop="emacsclient -e '(kill-emacs)'"
 alias vim=nvim
 alias ipy=ipython3
 alias k=kubectl
-alias docker=podman

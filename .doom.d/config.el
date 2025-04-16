@@ -83,7 +83,8 @@
         company-show-quick-access t))
 
 (after! corfu
-  (setq corfu-auto-delay 0.05))
+  (setq corfu-preview-current 'insert
+        corfu-auto-delay 0.05))
 
 (after! doom-modeline ;; modeline icons are currently interfering with lsp (somehow)
   (setq doom-modeline-icon nil))
@@ -105,6 +106,9 @@
       lsp-restart 'auto-restart
       lsp-enable-dap-auto-configure t)
 
+(after! org-modern
+  (setq org-modern-checkbox '((?X . "☑") (?- . #("□–" 0 2 (composition ((2))))) (?\s . "□"))))
+
 (after! lsp-mode
   (advice-add #'add-node-modules-path :override #'ignore))
 
@@ -121,43 +125,98 @@
 
 (use-package! gptel
   :config
-  (setq gptel-expert-commands t)
-  (add-hook 'gptel-post-response-functions 'gptel-end-of-response)
-  (add-hook 'gptel-post-stream-hook 'gptel-auto-scroll)
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("llama3.1:8b" "llama3.2:3b" "qwen2.5-coder:14b" "deepseek-r1:32b" "phi4"))
-  (gptel-make-gemini "Gemini"
-    :stream t
-    :key (getenv "GOOGLE_GENAI_API_KEY"))
+    :models '("qwen2.5-coder:14b"
+              "qwen2.5-coder:32b"
+              "qwen3:30b-a3b"
+              "qwen3:8b"
+              "gemma3:12b"
+              "gemma3:27b"))
   (gptel-make-anthropic "Claude"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY"))
+  (gptel-make-anthropic "Claude-Thinking"
+    :stream t
+    :key (getenv "ANTHROPIC_API_KEY")
+    :models '((claude-3-7-sonnet-latest
+               :description "Highest level of intelligence and capability"
+               :capabilities (media tool-use cache)
+               :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
+               :context-window 200
+               :input-cost 3
+               :output-cost 15
+               :cutoff-date "2024-11"))
+    :request-params '(:thinking (:type "enabled" :budget_tokens 16384))
+    :header (lambda () (when-let* ((key (gptel--get-api-key)))
+                         `(("x-api-key" . ,key)
+                           ("anthropic-version" . "2023-06-01")
+                           ("anthropic-beta" . "pdfs-2024-09-25")
+                           ("anthropic-beta" . "output-128k-2025-02-19")
+                           ("anthropic-beta" . "prompt-caching-2024-07-31")))))
+
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
          gptel-expert-commands t
+         gptel-use-tools t
          gptel-max-tokens 32768
-         gptel-backend (gptel-make-anthropic "Claude-Thinking"
+         gptel-backend (gptel-make-gemini "Gemini"
                          :stream t
-                         :key (getenv "ANTHROPIC_API_KEY")
-                         :models '((claude-3-7-sonnet-latest
-                                    :description "Highest level of intelligence and capability"
-                                    :capabilities (media tool-use cache)
-                                    :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
-                                    :context-window 200
-                                    :input-cost 3
-                                    :output-cost 15
-                                    :cutoff-date "2024-11"))
-                         :request-params '(:thinking (:type "enabled" :budget_tokens 16384))
-                         :header (lambda () (when-let* ((key (gptel--get-api-key)))
-                                              `(("x-api-key" . ,key)
-                                                ("anthropic-version" . "2023-06-01")
-                                                ("anthropic-beta" . "pdfs-2024-09-25")
-                                                ("anthropic-beta" . "output-128k-2025-02-19")
-                                                ("anthropic-beta" . "prompt-caching-2024-07-31")))))
-         ;; gptel-model 'gemini-2.0-pro-exp-02-05
-         gptel-model 'claude-3-7-sonnet-latest
-         gptel-default-mode 'org-mode))
+                         :key (getenv "GOOGLE_GENAI_API_KEY"))
+         gptel-model 'gemini-2.5-pro-preview-03-25
+         gptel-log-level 'debug
+         gptel-default-mode 'org-mode
+         gptel-tools (list
+                      (gptel-make-tool
+                       :function (lambda (buffer)
+                                   (unless (buffer-live-p (get-buffer buffer))
+                                     (error "Error: buffer %s is not live." buffer))
+                                   (with-current-buffer buffer
+                                     (buffer-substring-no-properties (point-min) (point-max))))
+                       :name "read_buffer"
+                       :description "Return the contents of an Emacs buffer"
+                       :args (list '(:name "buffer"
+                                     :type string
+                                     :description "The name of the buffer whose contents are to be retrieved"))
+                       :category "emacs")
+                      (gptel-make-tool
+                       :function (lambda (url)
+                                   (with-current-buffer (url-retrieve-synchronously url)
+                                     (goto-char (point-min))
+                                     (forward-paragraph)
+                                     (let ((dom (libxml-parse-html-region (point) (point-max))))
+                                       (run-at-time 0 nil #'kill-buffer (current-buffer))
+                                       (with-temp-buffer
+                                         (shr-insert-document dom)
+                                         (buffer-substring-no-properties (point-min) (point-max))))))
+                       :name "read_url"
+                       :description "Fetch and read the contents of a URL"
+                       :args (list '(:name "url"
+                                     :type string
+                                     :description "The URL to read"))
+                       :category "web")
+                      (gptel-make-tool
+                       :function (lambda (directory)
+                                   (mapconcat #'identity
+                                              (directory-files directory)
+                                              "\n"))
+                       :name "list_directory"
+                       :description "List the contents of a given directory"
+                       :args (list '(:name "directory"
+                                     :type string
+                                     :description "The path to the directory to list"))
+                       :category "filesystem")
+                      (gptel-make-tool
+                       :function (lambda (filepath)
+                                   (with-temp-buffer
+                                     (insert-file-contents (expand-file-name filepath))
+                                     (buffer-string)))
+                       :name "read_file"
+                       :description "Read and display the contents of a file"
+                       :args (list '(:name "filepath"
+                                     :type string
+                                     :description "Path to the file to read. Supports relative paths and ~."))
+                       :category "filesystem"))))
 
 (org-babel-do-load-languages
  'org-babel-load-languages

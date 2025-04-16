@@ -53,8 +53,8 @@
 (package! bazel)
 (package! protobuf-mode)
 (package! polymode)
-(package! gptel)
-(package! ein)
+
+(package! gptel :recipe (:nonrecursive t))
 
 ;;(package! dash-at-point)
 ;;(package! hledger-mode)
