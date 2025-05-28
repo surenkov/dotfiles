@@ -54,7 +54,7 @@
 (package! protobuf-mode)
 (package! polymode)
 
-(package! gptel :recipe (:nonrecursive t))
+(unpin! gptel)
 
 ;;(package! dash-at-point)
 ;;(package! hledger-mode)

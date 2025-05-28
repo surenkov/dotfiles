@@ -94,7 +94,7 @@
 (add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
 (add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
 
-(setq lsp-disabled-clients '(flow-ls jsts-ls)
+(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls)
       lsp-diagnostics-provider :auto
       lsp-pyright-multi-root nil
       lsp-ruff-ruff-args '("--preview")
@@ -123,8 +123,7 @@
   (defun dap-python--pyenv-executable-find (command)
     (executable-find "python")))
 
-(use-package! gptel
-  :config
+(after! gptel
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
@@ -140,30 +139,42 @@
   (gptel-make-anthropic "Claude-Thinking"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY")
-    :models '((claude-3-7-sonnet-latest
-               :description "Highest level of intelligence and capability"
+    :models '((claude-sonnet-4-0
+               :description "High-performance model with exceptional reasoning and efficiency"
                :capabilities (media tool-use cache)
                :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
                :context-window 200
                :input-cost 3
                :output-cost 15
-               :cutoff-date "2024-11"))
+               :cutoff-date "2025-03")
+              (claude-opus-4-0
+               :description "Most capable model for complex reasoning and advanced coding"
+               :capabilities (media tool-use cache)
+               :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
+               :context-window 200
+               :input-cost 15
+               :output-cost 75
+               :cutoff-date "2025-03"))
     :request-params '(:thinking (:type "enabled" :budget_tokens 16384))
     :header (lambda () (when-let* ((key (gptel--get-api-key)))
                          `(("x-api-key" . ,key)
                            ("anthropic-version" . "2023-06-01")
                            ("anthropic-beta" . "pdfs-2024-09-25")
-                           ("anthropic-beta" . "output-128k-2025-02-19")
                            ("anthropic-beta" . "prompt-caching-2024-07-31")))))
 
+  (defun gptel--select-and-resize-window (window)
+    (select-window window)
+    (evil-resize-window 80 t))
+
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
+         gptel-display-buffer-action `(nil (body-function . ,#'gptel--select-and-resize-window))
          gptel-expert-commands t
          gptel-use-tools t
-         gptel-max-tokens 32768
+         gptel-max-tokens 32000
          gptel-backend (gptel-make-gemini "Gemini"
                          :stream t
                          :key (getenv "GOOGLE_GENAI_API_KEY"))
-         gptel-model 'gemini-2.5-pro-preview-03-25
+         gptel-model 'gemini-2.5-pro-preview-05-06
          gptel-log-level 'debug
          gptel-default-mode 'org-mode
          gptel-tools (list
@@ -230,7 +241,7 @@
    (javascript . t)
    (html . t)
    (sh . t)
-   (sql . nil)
+   (sql . t)
    (sqlite . t)))
 
 (use-package! hydra
@@ -284,12 +295,11 @@
       :n "SPC f t"  #'treemacs
       :n "g r"      #'+lookup/references
       :n "g i"      #'+lookup/implementations
-      :n "g D"      #'+lookup/type-definition
-      :nv "SPC c F" #'consult-lsp-file-symbols
-      :nv "SPC o C" #'gptel
-      :nv "SPC o c" #'gptel-menu
-      :nv "SPC b a" #'gptel-add
-      :nv "SPC f a" #'gptel-add-file)
+      :n "g D"      #'+lookup/type-definition)
+
+(map! :leader
+      :prefix ("c" . "code")
+      :desc "Search LSP Symbols in buffer" "F" #'consult-lsp-file-symbols)
 
 (map! :after transient
       :map transient-map
@@ -297,10 +307,11 @@
 
 (after! gptel
   (map! :mode gptel-mode
-        :n "RET"     #'gptel-send)
+        :n "RET"   #'gptel-send
+        :n "C-c C-k" #'gptel-abort)
   (map! :mode gptel-context-buffer-mode
-        :n "C-c C-c" #'gptel-context-confirm
-        :n "C-c C-k" #'gptel-context-quit
+        :n "Z Z" #'gptel-context-confirm
+        :n "Z Q" #'gptel-context-quit
         :n "RET"     #'gptel-context-visit
         :n "n"       #'gptel-context-next
         :n "p"       #'gptel-context-previous
