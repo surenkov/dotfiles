@@ -54,6 +54,12 @@
       require-final-newline t
       next-line-add-newlines nil
 
+      remote-file-name-inhibit-locks t
+      tramp-use-scp-direct-remote-copying t
+      remote-file-name-inhibit-auto-save-visited t
+      magit-tramp-pipe-stty-settings 'pty
+      vc-handled-backends '(Git)
+
       projectile-project-search-path '("~/Projects/")
       projectile-indexing-method 'hybrid
       org-directory "~/org/"
@@ -61,6 +67,22 @@
       ls-lisp-dirs-first t
       dired-listing-switches "-aBhl --group-directories-first" ; requires ls from 'coreutils' on macOS
       dired-dwim-target t)
+
+(connection-local-set-profile-variables
+ 'remote-direct-async-process
+ '((tramp-direct-async-process . t)))
+
+(connection-local-set-profiles
+ '(:application tramp :protocol "scp")
+ 'remote-direct-async-process)
+
+(with-eval-after-load 'tramp
+  (with-eval-after-load 'compile
+    (remove-hook 'compilation-mode-hook #'tramp-compile-disable-ssh-controlmaster-options)))
+
+(remove-hook 'evil-insert-state-exit-hook #'doom-modeline-update-buffer-file-name)
+(remove-hook 'find-file-hook #'doom-modeline-update-buffer-file-name)
+(remove-hook 'find-file-hook 'forge-bug-reference-setup)
 
 (unless (display-graphic-p)
   (xterm-mouse-mode 1))
@@ -96,6 +118,7 @@
 
 (setq lsp-disabled-clients '(flow-ls jsts-ls xmlls)
       lsp-diagnostics-provider :auto
+      lsp-pyright-langserver-command "basedpyright"
       lsp-pyright-multi-root nil
       lsp-ruff-ruff-args '("--preview")
       lsp-log-io nil
@@ -110,6 +133,15 @@
   (setq org-modern-checkbox '((?X . "☑") (?- . #("□–" 0 2 (composition ((2))))) (?\s . "□"))))
 
 (after! lsp-mode
+  (defvar lsp--warning-suppress-message-regexps '("Unknown notification: semgrep/rulesRefreshed"))
+
+  (defun lsp--display-warning-advise (type message &optional level buffer-name)
+    (catch 'exit
+      (dolist (regexp lsp--warning-suppress-message-regexps)
+        (when (string-match-p regexp message) (throw 'exit nil)))
+      (throw 'exit t)))
+
+  (advice-add 'display-warning :before-while #'lsp--display-warning-advise)
   (advice-add #'add-node-modules-path :override #'ignore))
 
 (after! dap-mode
@@ -124,15 +156,17 @@
     (executable-find "python")))
 
 (after! gptel
+  ;; DEFINE: LLMs
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("qwen2.5-coder:14b"
-              "qwen2.5-coder:32b"
+    :models '("gemma3:12b"
+              "gemma3:27b"
+              "gemma3n:latest"
+              "gpt-oss:20b"
               "qwen3:30b-a3b"
-              "qwen3:8b"
-              "gemma3:12b"
-              "gemma3:27b"))
+              "qwen3-coder:30b"
+              "deepseek-r1:32b"))
   (gptel-make-anthropic "Claude"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY"))
@@ -162,72 +196,82 @@
                            ("anthropic-beta" . "pdfs-2024-09-25")
                            ("anthropic-beta" . "prompt-caching-2024-07-31")))))
 
-  (defun gptel--select-and-resize-window (window)
-    (select-window window)
-    (evil-resize-window 80 t))
+  ;; DEFINE: Tools
+  (use-package! llm-tool-collection)
+  (use-package! codel)
+
+  (apply #'gptel-make-tool llm-tc/read-file)
+  (apply #'gptel-make-tool llm-tc/list-directory)
+  (apply #'gptel-make-tool llm-tc/create-file)
+  (apply #'gptel-make-tool llm-tc/create-directory)
+
+  (apply #'gptel-make-tool llm-tc/view-buffer)
+  (apply #'gptel-make-tool llm-tc/edit-buffer)
+
+  (dolist (custom-tool-plist
+           '((:name "glob"
+              :function codel-glob-tool
+              :category "filesystem"
+              :description "Find files matching glob pattern"
+              :args ((:name "pattern" :type string :description "Glob pattern to match files")
+                     (:name "path" :type string :description "Directory to search in" :optional t)))
+             (:name "grep"
+              :function codel-grep-tool
+              :category "filesystem"
+              :description "Search file content using regex"
+              :args ((:name "pattern" :type string :description "Regex pattern to search in file contents")
+                     (:name "include" :type string :description "File pattern to include in search")
+                     (:name "path" :type string :description "Directory to search in" :optional t)))
+             (:name "edit_file"
+              :function codel-edit
+              :category "filesystem"
+              :description "Edit specified file"
+              :confirm t
+              :args ((:name "file_path" :type string :description "Absolute path of the file to modify")
+                     (:name "old_string" :type string :description "Text to replace (must match exactly)")
+                     (:name "new_string" :type string :description "New text to replace old_string with")))))
+    (apply #'gptel-make-tool custom-tool-plist))
+
+  ;; DEFINE: Presets
+
+  (gptel-make-preset 'default
+                     :description "Default preset"
+                     :backend "Gemini"
+                     :system (alist-get 'default gptel-directives)
+                     :model 'gemini-2.5-pro
+                     :tools nil)
+
+  (gptel-make-preset 'coding
+                     :description "A preset optimized for coding tasks"
+                     :backend "Gemini"
+                     :model 'gemini-2.5-pro
+                     :system "You are an expert coding assistant. Your role is to provide high-quality code solutions, refactorings, and explanations."
+                     :tools '("glob" "grep" "list_directory" "read_file" "create_file" "edit_file" "create_directory" "view_buffer" "edit_buffer"))
+
+  ;; DEFINE: Config
+
+  (set-popup-rule!
+    (lambda (bname _action)
+      (buffer-local-value 'gptel-mode (get-buffer bname)))
+    :select t
+    :side 'right
+    :size 0.4
+    :quit 'other
+    :ttl nil)
 
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
-         gptel-display-buffer-action `(nil (body-function . ,#'gptel--select-and-resize-window))
+         gptel-display-buffer-action nil
          gptel-expert-commands t
          gptel-use-tools t
          gptel-max-tokens 32000
+         gptel--preset 'default
          gptel-backend (gptel-make-gemini "Gemini"
                          :stream t
                          :key (getenv "GOOGLE_GENAI_API_KEY"))
-         gptel-model 'gemini-2.5-pro-preview-05-06
-         gptel-log-level 'debug
+         gptel-model 'gemini-2.5-pro
          gptel-default-mode 'org-mode
-         gptel-tools (list
-                      (gptel-make-tool
-                       :function (lambda (buffer)
-                                   (unless (buffer-live-p (get-buffer buffer))
-                                     (error "Error: buffer %s is not live." buffer))
-                                   (with-current-buffer buffer
-                                     (buffer-substring-no-properties (point-min) (point-max))))
-                       :name "read_buffer"
-                       :description "Return the contents of an Emacs buffer"
-                       :args (list '(:name "buffer"
-                                     :type string
-                                     :description "The name of the buffer whose contents are to be retrieved"))
-                       :category "emacs")
-                      (gptel-make-tool
-                       :function (lambda (url)
-                                   (with-current-buffer (url-retrieve-synchronously url)
-                                     (goto-char (point-min))
-                                     (forward-paragraph)
-                                     (let ((dom (libxml-parse-html-region (point) (point-max))))
-                                       (run-at-time 0 nil #'kill-buffer (current-buffer))
-                                       (with-temp-buffer
-                                         (shr-insert-document dom)
-                                         (buffer-substring-no-properties (point-min) (point-max))))))
-                       :name "read_url"
-                       :description "Fetch and read the contents of a URL"
-                       :args (list '(:name "url"
-                                     :type string
-                                     :description "The URL to read"))
-                       :category "web")
-                      (gptel-make-tool
-                       :function (lambda (directory)
-                                   (mapconcat #'identity
-                                              (directory-files directory)
-                                              "\n"))
-                       :name "list_directory"
-                       :description "List the contents of a given directory"
-                       :args (list '(:name "directory"
-                                     :type string
-                                     :description "The path to the directory to list"))
-                       :category "filesystem")
-                      (gptel-make-tool
-                       :function (lambda (filepath)
-                                   (with-temp-buffer
-                                     (insert-file-contents (expand-file-name filepath))
-                                     (buffer-string)))
-                       :name "read_file"
-                       :description "Read and display the contents of a file"
-                       :args (list '(:name "filepath"
-                                     :type string
-                                     :description "Path to the file to read. Supports relative paths and ~."))
-                       :category "filesystem"))))
+         gptel-log-level 'info
+         gptel-use-context 'user))
 
 (org-babel-do-load-languages
  'org-babel-load-languages
