@@ -56,6 +56,11 @@
 
 (unpin! gptel)
 
+(package! llm-tool-collection
+  :recipe (:host github :repo "skissue/llm-tool-collection"))
+(package! codel
+  :recipe (:host github :repo "ultronozm/codel.el"))
+
 ;;(package! dash-at-point)
 ;;(package! hledger-mode)
 ;;(package! k8s-mode)
