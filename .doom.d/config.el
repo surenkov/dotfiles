@@ -39,6 +39,9 @@
       doom-themes-enable-italic t
       doom-themes-padded-modeline t
 
+      confirm-kill-processes nil
+      kill-buffer-query-functions (delq 'process-kill-buffer-query-function kill-buffer-query-functions)
+
       truncate-string-ellipsis "…"
       scroll-margin 3
       evil-want-fine-undo t
@@ -116,16 +119,16 @@
 (add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
 (add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
 
-(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls)
+(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls)
       lsp-diagnostics-provider :auto
-      lsp-pyright-langserver-command "basedpyright"
+      ;; lsp-pyright-langserver-command "basedpyright"
       lsp-pyright-multi-root nil
       lsp-ruff-ruff-args '("--preview")
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
       read-process-output-max (* 1024 1024)
-      lsp-enable-file-watchers t
+      lsp-enable-file-watchers nil
       lsp-restart 'auto-restart
       lsp-enable-dap-auto-configure t)
 
@@ -133,16 +136,10 @@
   (setq org-modern-checkbox '((?X . "☑") (?- . #("□–" 0 2 (composition ((2))))) (?\s . "□"))))
 
 (after! lsp-mode
-  (defvar lsp--warning-suppress-message-regexps '("Unknown notification: semgrep/rulesRefreshed"))
-
-  (defun lsp--display-warning-advise (type message &optional level buffer-name)
-    (catch 'exit
-      (dolist (regexp lsp--warning-suppress-message-regexps)
-        (when (string-match-p regexp message) (throw 'exit nil)))
-      (throw 'exit t)))
-
-  (advice-add 'display-warning :before-while #'lsp--display-warning-advise)
   (advice-add #'add-node-modules-path :override #'ignore))
+
+(after! project
+  (add-to-list 'project-vc-ignores "./.venv/"))
 
 (after! dap-mode
   (add-hook! 'dap-stopped-hook
@@ -197,56 +194,47 @@
                            ("anthropic-beta" . "prompt-caching-2024-07-31")))))
 
   ;; DEFINE: Tools
-  (use-package! llm-tool-collection)
-  (use-package! codel)
 
-  (apply #'gptel-make-tool llm-tc/read-file)
-  (apply #'gptel-make-tool llm-tc/list-directory)
-  (apply #'gptel-make-tool llm-tc/create-file)
-  (apply #'gptel-make-tool llm-tc/create-directory)
-
-  (apply #'gptel-make-tool llm-tc/view-buffer)
-  (apply #'gptel-make-tool llm-tc/edit-buffer)
-
-  (dolist (custom-tool-plist
-           '((:name "glob"
-              :function codel-glob-tool
-              :category "filesystem"
-              :description "Find files matching glob pattern"
-              :args ((:name "pattern" :type string :description "Glob pattern to match files")
-                     (:name "path" :type string :description "Directory to search in" :optional t)))
-             (:name "grep"
-              :function codel-grep-tool
-              :category "filesystem"
-              :description "Search file content using regex"
-              :args ((:name "pattern" :type string :description "Regex pattern to search in file contents")
-                     (:name "include" :type string :description "File pattern to include in search")
-                     (:name "path" :type string :description "Directory to search in" :optional t)))
-             (:name "edit_file"
-              :function codel-edit
-              :category "filesystem"
-              :description "Edit specified file"
-              :confirm t
-              :args ((:name "file_path" :type string :description "Absolute path of the file to modify")
-                     (:name "old_string" :type string :description "Text to replace (must match exactly)")
-                     (:name "new_string" :type string :description "New text to replace old_string with")))))
-    (apply #'gptel-make-tool custom-tool-plist))
+  (use-package! mcp
+    :custom (mcp-hub-servers
+             `(("filesystem" . (:command "npx" :args ("-y" "@modelcontextprotocol/server-filesystem" "/Users/surenkov/Projects/")))
+               ("context7" . (:command "npx" :args ("-y" "@upstash/context7-mcp" "--api-key" ,(getenv "CONTEXT7_API_KEY"))))))
+    :config
+    (require 'mcp-hub)
+    (require 'gptel-integrations)
+    (mcp-hub-start-all-server))
 
   ;; DEFINE: Presets
 
   (gptel-make-preset 'default
-                     :description "Default preset"
-                     :backend "Gemini"
-                     :system (alist-get 'default gptel-directives)
-                     :model 'gemini-2.5-pro
-                     :tools nil)
-
+    :description "Default preset"
+    :backend "Gemini"
+    :system (alist-get 'default gptel-directives)
+    :model 'gemini-2.5-pro
+    :tools nil)
   (gptel-make-preset 'coding
-                     :description "A preset optimized for coding tasks"
-                     :backend "Gemini"
-                     :model 'gemini-2.5-pro
-                     :system "You are an expert coding assistant. Your role is to provide high-quality code solutions, refactorings, and explanations."
-                     :tools '("glob" "grep" "list_directory" "read_file" "create_file" "edit_file" "create_directory" "view_buffer" "edit_buffer"))
+    :description "A preset optimized for coding tasks"
+    :backend "Gemini"
+    :model 'gemini-2.5-pro
+    :system "You are an expert coding assistant. Your role is to provide high-quality code solutions, refactorings, and explanations."
+    :tools '("read_text_file" "read_file" "read_multiple_files" "create_directory" "write_file" "edit_file" "list_directory" "move_file" "search_files" "resolve-library-id" "get-library-docs")
+    :pre #'gptel-mcp-connect)
+  (gptel-make-preset 'code-analysis
+    :description "A preset optimized for read-only coding tasks"
+    :backend "Gemini"
+    :model 'gemini-2.5-pro
+    :system "You are an expert coding assistant. Your role is to provide high-quality code solutions, refactorings, and explanations."
+    :tools '("read_text_file" "read_file" "read_multiple_files" "list_directory" "search_files" "resolve-library-id" "get-library-docs")
+    :pre #'gptel-mcp-connect)
+  (gptel-make-preset 'gemini-grounded
+    :backend (gptel-make-gemini "Gemini-Grounded"
+               :stream t
+               :request-params '(:tools [(:google_search ())])
+               :key (getenv "GOOGLE_GENAI_API_KEY"))
+    :description "Gemini with Google Search grounding"
+    :system (alist-get 'default gptel-directives)
+    :model 'gemini-2.5-pro
+    :tools nil)
 
   ;; DEFINE: Config
 
@@ -263,6 +251,7 @@
          gptel-display-buffer-action nil
          gptel-expert-commands t
          gptel-use-tools t
+         gptel-include-tool-results t
          gptel-max-tokens 32000
          gptel--preset 'default
          gptel-backend (gptel-make-gemini "Gemini"

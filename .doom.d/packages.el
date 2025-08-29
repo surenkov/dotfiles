@@ -54,12 +54,12 @@
 (package! protobuf-mode)
 (package! polymode)
 
-(unpin! gptel)
+(unpin! magit evil-magit)
 
-(package! llm-tool-collection
-  :recipe (:host github :repo "skissue/llm-tool-collection"))
-(package! codel
-  :recipe (:host github :repo "ultronozm/codel.el"))
+(unpin! gptel)
+(package! gptel-magit :disable t)
+(package! gptel-quick :disable t)
+(package! mcp :recipe (:repo "lizqwerscott/mcp.el"))
 
 ;;(package! dash-at-point)
 ;;(package! hledger-mode)
@@ -68,5 +68,5 @@
 ;;(package! platformio-mode)
 
 ;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
-;;(unpin! lsp-mode lsp-ui dap-mode)
+(unpin! lsp-mode lsp-ui dap-mode)
 ;;(unpin! vertico embark)
