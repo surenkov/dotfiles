@@ -20,6 +20,7 @@ set -gx GDAL_LIBRARY_PATH "$(gdal-config --prefix)/lib/libgdal.dylib"
 set -gx GEOS_LIBRARY_PATH "$(geos-config --prefix)/lib/libgeos_c.dylib"
 
 set -gx RIPGREP_CONFIG_PATH $HOME/.ripgreprc
+set -gx FZF_DEFAULT_COMMAND 'rg --files'
 
 pyenv init - | source
 direnv hook fish | source

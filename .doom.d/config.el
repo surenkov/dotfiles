@@ -71,6 +71,9 @@
       dired-listing-switches "-aBhl --group-directories-first" ; requires ls from 'coreutils' on macOS
       dired-dwim-target t)
 
+(cond ((featurep :system 'macos) ;; mac specific settings
+       (setq insert-directory-program "/opt/homebrew/bin/gls")))
+
 (connection-local-set-profile-variables
  'remote-direct-async-process
  '((tramp-direct-async-process . t)))
@@ -96,61 +99,50 @@
               vterm-shell (executable-find "fish")
               explicit-shell-file-name (executable-find "fish"))
 
-(cond ((featurep :system 'macos) ;; mac specific settings
-       (setq insert-directory-program "/opt/homebrew/bin/gls")))
-
 (add-hook! (prog-mode conf-mode text-mode) #'display-fill-column-indicator-mode)
-
-(after! company
-  (setq company-idle-delay 0
-        company-dabbrev-downcase 0
-        company-require-match nil
-        company-show-quick-access t))
 
 (after! corfu
   (setq corfu-preview-current 'insert
         corfu-auto-delay 0.05))
 
-(after! doom-modeline ;; modeline icons are currently interfering with lsp (somehow)
-  (setq doom-modeline-icon nil))
-
-(defun web-mode-better-self-closing-indent (&rest _)
-  (setq web-mode-attr-indent-offset nil))
-(add-hook 'web-mode-hook #'web-mode-better-self-closing-indent)
-(add-hook 'editorconfig-after-apply-functions #'web-mode-better-self-closing-indent)
-
-(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls)
+(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls ty zuban)
       lsp-diagnostics-provider :auto
-      ;; lsp-pyright-langserver-command "basedpyright"
+      lsp-warn-no-matched-clients nil
+      lsp-pyright-langserver-command "basedpyright"
       lsp-pyright-multi-root nil
       lsp-ruff-ruff-args '("--preview")
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
-      read-process-output-max (* 1024 1024)
+      read-process-output-max (* 1024 1024 512)
       lsp-enable-file-watchers nil
       lsp-restart 'auto-restart
       lsp-enable-dap-auto-configure t)
 
-(after! org-modern
-  (setq org-modern-checkbox '((?X . "☑") (?- . #("□–" 0 2 (composition ((2))))) (?\s . "□"))))
+;; (after! lsp
+;;   (lsp-register-client
+;;    (make-lsp-client
+;;     :new-connection (lsp-stdio-connection '("uvx" "ty" "server"))
+;;     :activation-fn (lsp-activate-on "python")
+;;     :server-id 'ty
+;;     :priority -2
+;;     :add-on? t))
+;;   (lsp-register-client
+;;    (make-lsp-client
+;;     :new-connection (lsp-stdio-connection '("zuban" "server"))
+;;     :activation-fn (lsp-activate-on "python")
+;;     :server-id 'zuban
+;;     :priority -3
+;;     :add-on? t)))
 
-(after! lsp-mode
-  (advice-add #'add-node-modules-path :override #'ignore))
+(cond ((featurep :system 'macos)
+       (after! eglot
+         (cl-defmethod eglot-register-capability
+           (server (method (eql workspace/didChangeWatchedFiles)) id &key watchers)
+           nil))))
 
 (after! project
   (add-to-list 'project-vc-ignores "./.venv/"))
-
-(after! dap-mode
-  (add-hook! 'dap-stopped-hook
-    (lambda (arg) (call-interactively #'dap-hydra))))
-
-(after! (python dap-mode)
-  (require 'dap-python)
-  (require 'dap-lldb)
-  (setq dap-python-debugger 'debugpy)
-  (defun dap-python--pyenv-executable-find (command)
-    (executable-find "python")))
 
 (after! gptel
   ;; DEFINE: LLMs
@@ -170,7 +162,7 @@
   (gptel-make-anthropic "Claude-Thinking"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY")
-    :models '((claude-sonnet-4-0
+    :models '((claude-opus-4-1
                :description "High-performance model with exceptional reasoning and efficiency"
                :capabilities (media tool-use cache)
                :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
@@ -194,47 +186,161 @@
                            ("anthropic-beta" . "prompt-caching-2024-07-31")))))
 
   ;; DEFINE: Tools
+  (defun surenkov/rg-tool (pattern &optional include path)
+    "Search for PATTERN in files in PATH using ripgrep."
+    (let* ((default-directory (doom-project-root))
+           (search-path (shell-quote-argument (or path ".")))
+           (glob-arg (if include
+                         (format "-g %s" (shell-quote-argument include))
+                       ""))
+           (command (format "rg --color=never -n %s -- %s %s"
+                            glob-arg
+                            (shell-quote-argument pattern)
+                            search-path))
+           (result (shell-command-to-string command)))
+      (if (string-empty-p result)
+          "No matches found"
+        result)))
 
-  (use-package! mcp
-    :custom (mcp-hub-servers
-             `(("filesystem" . (:command "npx" :args ("-y" "@modelcontextprotocol/server-filesystem" "/Users/surenkov/Projects/")))
-               ("context7" . (:command "npx" :args ("-y" "@upstash/context7-mcp" "--api-key" ,(getenv "CONTEXT7_API_KEY"))))))
+  (defun surenkov/fzf-tool (pattern &optional exact path)
+    "Fuzzy search for file names matching PATTERN in PATH using fzf."
+    (let* ((default-directory (doom-project-root))
+           (search-path (shell-quote-argument (or path ".")))
+           (command (format "rg --files %s | fzf --ansi --filter=%s %s"
+                            search-path
+                            (shell-quote-argument pattern)
+                            (if exact "--exact" "")))
+           (result (shell-command-to-string command)))
+      (if (string-empty-p result)
+          "No matches found"
+        result)))
+
+  (defun surenkov/cat-file-tool (path)
+    "Read the contents of file at PATH and return it as a string."
+    (let ((default-directory (doom-project-root)))
+      (if (file-readable-p path)
+          (with-temp-buffer
+            (insert-file-contents path)
+            (buffer-string))
+        (format "Error: File '%s' is not readable or does not exist." path))))
+
+  (defun surenkov/list-buffers-tool ()
+    "List open Emacs buffers."
+    (let ((buffers (cl-remove-if-not #'buffer-file-name (buffer-list))))
+      (mapconcat #'buffer-name buffers "\n")))
+
+  (defun surenkov/read-buffer-tool (buffer-name &optional offset limit)
+    "Return content of BUFFER-NAME with optional OFFSET and LIMIT.
+OFFSET is the starting line number (1-based).
+LIMIT is the maximum number of lines to return."
+    (if-let ((buffer (get-buffer buffer-name)))
+        (with-current-buffer buffer
+          (save-excursion
+            (goto-char (point-min))
+            (when (and offset (numberp offset) (> offset 0))
+              (forward-line (1- offset)))
+            (let ((start (point)))
+              (if (and limit (numberp limit) (> limit 0))
+                  (progn
+                    (forward-line limit)
+                    (buffer-substring-no-properties start (point)))
+                (buffer-substring-no-properties start (point-max))))))
+      (format "Error: Buffer '%s' does not exist." buffer-name)))
+
+  (defun surenkov/git-apply-patch-tool (patch)
+    "Apply a git-formatted PATCH string using `git apply'.
+The patch is applied relative to the project root."
+    (let ((default-directory (doom-project-root)))
+      (with-temp-buffer
+        (insert (if (string-suffix-p hard-newline patch) patch (concat patch hard-newline)))
+        (let ((output-buffer (generate-new-buffer "*git-apply-output*")))
+          (unwind-protect
+              (condition-case err
+                  ;; Use "-" to read patch from stdin.
+                  (let ((exit-code (call-process-region (point-min) (point-max) "git" nil output-buffer t "apply" "--" "-")))
+                    (with-current-buffer output-buffer
+                      (if (zerop exit-code)
+                          "Patch applied successfully."
+                        (format "Error applying patch (exit code %d):\n%s" exit-code (buffer-string)))))
+                (format "Error executing 'git apply': %s" (error-message-string err)))
+            (kill-buffer output-buffer))))))
+
+  (dolist (custom-tool-plist
+           '((:name "rg"
+              :function surenkov/rg-tool
+              :category "filesystem"
+              :description "Search file content using regex with ripgrep"
+              :args ((:name "pattern" :type string :description "Regex pattern to search in file contents")
+                     (:name "include" :type string :description "Pattern for files to include in search (e.g., \"*.py\")" :optional t)
+                     (:name "path" :type string :description "Directory to search in" :optional t)))
+             (:name "fzf"
+              :function surenkov/fzf-tool
+              :category "filesystem"
+              :description "Fuzzy search for file names using fzf"
+              :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names")
+                     (:name "exact" :type boolean :description "Enable exact-match" :optional t)
+                     (:name "path" :type string :description "Directory to search in" :optional t)))
+             (:name "cat"
+              :function surenkov/cat-file-tool
+              :category "filesystem"
+              :description "Read the entire content of a file and return it as a string."
+              :args ((:name "path" :type string :description "Path to the file to read.")))
+             (:name "list_buffers"
+              :function surenkov/list-buffers-tool
+              :category "emacs"
+              :description "Lists currently open buffers in Emacs.")
+             (:name "read_buffer"
+              :function surenkov/read-buffer-tool
+              :category "emacs"
+              :description "Return content of BUFFER-NAME with optional OFFSET and LIMIT. OFFSET is the starting line number (1-based). LIMIT is the maximum number of lines to return."
+              :args ((:name "buffer-name" :type string :description "The name of the buffer to view.")
+                     (:name "offset" :type integer :description "Line number to start reading from (1-based)." :optional t)
+                     (:name "limit" :type integer :description "Maximum number of lines to return." :optional t)))
+             (:name "git_apply_patch"
+              :function surenkov/git-apply-patch-tool
+              :category "filesystem"
+              :description "Apply a git-formatted PATCH string using `git apply'. The patch is applied relative to the project root."
+              :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))))
+    (apply #'gptel-make-tool custom-tool-plist))
+
+  ;; DEFINE: Prompts
+  (defun gptel-prompts-current-project-variables (_file)
+    `(("project_root" . ,(doom-project-root))
+      ("current_directory" . ,default-directory)))
+
+  (use-package! gptel-prompts
+    :demand t
     :config
-    (require 'mcp-hub)
-    (require 'gptel-integrations)
-    (mcp-hub-start-all-server))
+    (setq gptel-prompts-directory "~/.doom.d/prompts/"
+          gptel-prompts-template-functions '(gptel-prompts-add-current-time
+                                             gptel-prompts-current-project-variables))
+    (gptel-prompts-update))
 
   ;; DEFINE: Presets
-
   (gptel-make-preset 'default
     :description "Default preset"
     :backend "Gemini"
     :system (alist-get 'default gptel-directives)
-    :model 'gemini-2.5-pro
+    :model 'gemini-pro-latest
     :tools nil)
-  (gptel-make-preset 'coding
-    :description "A preset optimized for coding tasks"
-    :backend "Gemini"
-    :model 'gemini-2.5-pro
-    :system "You are an expert coding assistant. Your role is to provide high-quality code solutions, refactorings, and explanations."
-    :tools '("read_text_file" "read_file" "read_multiple_files" "create_directory" "write_file" "edit_file" "list_directory" "move_file" "search_files" "resolve-library-id" "get-library-docs")
-    :pre #'gptel-mcp-connect)
   (gptel-make-preset 'code-analysis
     :description "A preset optimized for read-only coding tasks"
     :backend "Gemini"
-    :model 'gemini-2.5-pro
-    :system "You are an expert coding assistant. Your role is to provide high-quality code solutions, refactorings, and explanations."
-    :tools '("read_text_file" "read_file" "read_multiple_files" "list_directory" "search_files" "resolve-library-id" "get-library-docs")
-    :pre #'gptel-mcp-connect)
+    :system (alist-get 'code-analysis gptel-directives)
+    :model 'gemini-pro-latest
+    :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer"))
+  (gptel-make-preset 'programming
+    :description "A preset optimized for coding tasks"
+    :parents 'code-analysis
+    :system (alist-get 'programming gptel-directives)
+    :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer" "git_apply_patch"))
   (gptel-make-preset 'gemini-grounded
+    :description "Gemini with Google Search grounding"
+    :parents 'default
     :backend (gptel-make-gemini "Gemini-Grounded"
                :stream t
                :request-params '(:tools [(:google_search ())])
-               :key (getenv "GOOGLE_GENAI_API_KEY"))
-    :description "Gemini with Google Search grounding"
-    :system (alist-get 'default gptel-directives)
-    :model 'gemini-2.5-pro
-    :tools nil)
+               :key (getenv "GOOGLE_GENAI_API_KEY")))
 
   ;; DEFINE: Config
 
@@ -257,25 +363,10 @@
          gptel-backend (gptel-make-gemini "Gemini"
                          :stream t
                          :key (getenv "GOOGLE_GENAI_API_KEY"))
-         gptel-model 'gemini-2.5-pro
+         gptel-model 'gemini-pro-latest
          gptel-default-mode 'org-mode
          gptel-log-level 'info
          gptel-use-context 'user))
-
-(org-babel-do-load-languages
- 'org-babel-load-languages
- '((emacs-lisp . t)
-   (haskell . nil)
-   (latex . t)
-   (ledger . t)
-   (hledger . t)
-   (python . t)
-   (ruby . t)
-   (javascript . t)
-   (html . t)
-   (sh . t)
-   (sql . t)
-   (sqlite . t)))
 
 (use-package! hydra
   :defer

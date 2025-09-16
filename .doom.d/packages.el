@@ -54,12 +54,15 @@
 (package! protobuf-mode)
 (package! polymode)
 
-(unpin! magit evil-magit)
+;(unpin! magit evil-magit)
 
 (unpin! gptel)
+(package! templatel)
+(package! gptel-prompts :recipe (:host github :repo "jwiegley/gptel-prompts"))
+
 (package! gptel-magit :disable t)
 (package! gptel-quick :disable t)
-(package! mcp :recipe (:repo "lizqwerscott/mcp.el"))
+(package! centered-window :disable t)
 
 ;;(package! dash-at-point)
 ;;(package! hledger-mode)
@@ -67,6 +70,7 @@
 ;;(package! vue-mode)
 ;;(package! platformio-mode)
 
-;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 (unpin! lsp-mode lsp-ui dap-mode)
+(unpin! org-mode org-contrib org-journal)
+;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 ;;(unpin! vertico embark)
