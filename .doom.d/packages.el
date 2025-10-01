@@ -62,7 +62,6 @@
 
 (package! gptel-magit :disable t)
 (package! gptel-quick :disable t)
-(package! centered-window :disable t)
 
 ;;(package! dash-at-point)
 ;;(package! hledger-mode)
@@ -71,6 +70,5 @@
 ;;(package! platformio-mode)
 
 (unpin! lsp-mode lsp-ui dap-mode)
-(unpin! org-mode org-contrib org-journal)
 ;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 ;;(unpin! vertico embark)

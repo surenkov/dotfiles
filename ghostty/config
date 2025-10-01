@@ -65,3 +65,6 @@ font-feature = -dlig
 
 macos-option-as-alt = true
 cursor-style = block
+
+clipboard-read = allow
+clipboard-write = allow

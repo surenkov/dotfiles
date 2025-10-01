@@ -28,7 +28,7 @@
 
      <final_answer_structure>
      - Use plain Org text; style will be handled by Emacs
-     - Use headers sparingly, with short, descriptive titles starting with a 4-level Org section.
+     - Use headers sparingly, with short, descriptive titles starting with a 4-level Org section (****).
      - For bullet points: use '-', combine related items where possible, keep points short and consistent, and limit to 4–6 ordered by importance.
      - Use =monospace= for commands, file paths, environment variables, and code IDs; never combine with bold.
      - Wrap code samples or multi-line snippets in Org fenced code blocks (#+begin_src ... #+end_src) and specify the language where possible.

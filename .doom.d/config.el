@@ -105,41 +105,38 @@
   (setq corfu-preview-current 'insert
         corfu-auto-delay 0.05))
 
-(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls ty zuban)
+(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls pyright)
+      gc-cons-threshold (* 100 1024 1024)
+      read-process-output-max (* 1024 1024)
+      lsp-idle-delay 0.2
       lsp-diagnostics-provider :auto
       lsp-warn-no-matched-clients nil
-      lsp-pyright-langserver-command "basedpyright"
-      lsp-pyright-multi-root nil
       lsp-ruff-ruff-args '("--preview")
       lsp-log-io nil
       lsp-idle-delay 0.500
       lsp-use-plists t
-      read-process-output-max (* 1024 1024 512)
       lsp-enable-file-watchers nil
       lsp-restart 'auto-restart
       lsp-enable-dap-auto-configure t)
 
-;; (after! lsp
-;;   (lsp-register-client
-;;    (make-lsp-client
-;;     :new-connection (lsp-stdio-connection '("uvx" "ty" "server"))
-;;     :activation-fn (lsp-activate-on "python")
-;;     :server-id 'ty
-;;     :priority -2
-;;     :add-on? t))
-;;   (lsp-register-client
-;;    (make-lsp-client
-;;     :new-connection (lsp-stdio-connection '("zuban" "server"))
-;;     :activation-fn (lsp-activate-on "python")
-;;     :server-id 'zuban
-;;     :priority -3
-;;     :add-on? t)))
-
-(cond ((featurep :system 'macos)
-       (after! eglot
-         (cl-defmethod eglot-register-capability
-           (server (method (eql workspace/didChangeWatchedFiles)) id &key watchers)
-           nil))))
+(after! lsp
+  (lsp-defcustom lsp-ty-experimental-rename t
+    "Enable the experimental support for renaming symbols in the editor."
+    :type 'boolean
+    :group 'ty
+    :lsp-path "ty.experimental.rename")
+  (lsp-defcustom lsp-ty-experimental-auto-import t
+    "Enable the experimental support for auto-import code completions."
+    :type 'boolean
+    :group 'ty
+    :lsp-path "ty.experimental.autoImport")
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("uvx" "ty" "server"))
+    :activation-fn (lsp-activate-on "python")
+    :server-id 'ty
+    :priority -3
+    :add-on? t)))
 
 (after! project
   (add-to-list 'project-vc-ignores "./.venv/"))
@@ -186,7 +183,7 @@
                            ("anthropic-beta" . "prompt-caching-2024-07-31")))))
 
   ;; DEFINE: Tools
-  (defun surenkov/rg-tool (pattern &optional include path)
+  (defun my/rg-tool (pattern &optional include path)
     "Search for PATTERN in files in PATH using ripgrep."
     (let* ((default-directory (doom-project-root))
            (search-path (shell-quote-argument (or path ".")))
@@ -202,7 +199,7 @@
           "No matches found"
         result)))
 
-  (defun surenkov/fzf-tool (pattern &optional exact path)
+  (defun my/fzf-tool (pattern &optional exact path)
     "Fuzzy search for file names matching PATTERN in PATH using fzf."
     (let* ((default-directory (doom-project-root))
            (search-path (shell-quote-argument (or path ".")))
@@ -215,7 +212,7 @@
           "No matches found"
         result)))
 
-  (defun surenkov/cat-file-tool (path)
+  (defun my/cat-file-tool (path)
     "Read the contents of file at PATH and return it as a string."
     (let ((default-directory (doom-project-root)))
       (if (file-readable-p path)
@@ -224,12 +221,12 @@
             (buffer-string))
         (format "Error: File '%s' is not readable or does not exist." path))))
 
-  (defun surenkov/list-buffers-tool ()
+  (defun my/list-buffers-tool ()
     "List open Emacs buffers."
     (let ((buffers (cl-remove-if-not #'buffer-file-name (buffer-list))))
       (mapconcat #'buffer-name buffers "\n")))
 
-  (defun surenkov/read-buffer-tool (buffer-name &optional offset limit)
+  (defun my/read-buffer-tool (buffer-name &optional offset limit)
     "Return content of BUFFER-NAME with optional OFFSET and LIMIT.
 OFFSET is the starting line number (1-based).
 LIMIT is the maximum number of lines to return."
@@ -247,7 +244,7 @@ LIMIT is the maximum number of lines to return."
                 (buffer-substring-no-properties start (point-max))))))
       (format "Error: Buffer '%s' does not exist." buffer-name)))
 
-  (defun surenkov/git-apply-patch-tool (patch)
+  (defun my/git-apply-patch-tool (patch)
     "Apply a git-formatted PATCH string using `git apply'.
 The patch is applied relative to the project root."
     (let ((default-directory (doom-project-root)))
@@ -267,37 +264,37 @@ The patch is applied relative to the project root."
 
   (dolist (custom-tool-plist
            '((:name "rg"
-              :function surenkov/rg-tool
+              :function my/rg-tool
               :category "filesystem"
               :description "Search file content using regex with ripgrep"
               :args ((:name "pattern" :type string :description "Regex pattern to search in file contents")
                      (:name "include" :type string :description "Pattern for files to include in search (e.g., \"*.py\")" :optional t)
                      (:name "path" :type string :description "Directory to search in" :optional t)))
              (:name "fzf"
-              :function surenkov/fzf-tool
+              :function my/fzf-tool
               :category "filesystem"
               :description "Fuzzy search for file names using fzf"
               :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names")
                      (:name "exact" :type boolean :description "Enable exact-match" :optional t)
                      (:name "path" :type string :description "Directory to search in" :optional t)))
              (:name "cat"
-              :function surenkov/cat-file-tool
+              :function my/cat-file-tool
               :category "filesystem"
               :description "Read the entire content of a file and return it as a string."
               :args ((:name "path" :type string :description "Path to the file to read.")))
              (:name "list_buffers"
-              :function surenkov/list-buffers-tool
+              :function my/list-buffers-tool
               :category "emacs"
               :description "Lists currently open buffers in Emacs.")
              (:name "read_buffer"
-              :function surenkov/read-buffer-tool
+              :function my/read-buffer-tool
               :category "emacs"
               :description "Return content of BUFFER-NAME with optional OFFSET and LIMIT. OFFSET is the starting line number (1-based). LIMIT is the maximum number of lines to return."
               :args ((:name "buffer-name" :type string :description "The name of the buffer to view.")
                      (:name "offset" :type integer :description "Line number to start reading from (1-based)." :optional t)
                      (:name "limit" :type integer :description "Maximum number of lines to return." :optional t)))
              (:name "git_apply_patch"
-              :function surenkov/git-apply-patch-tool
+              :function my/git-apply-patch-tool
               :category "filesystem"
               :description "Apply a git-formatted PATCH string using `git apply'. The patch is applied relative to the project root."
               :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))))
@@ -315,6 +312,19 @@ The patch is applied relative to the project root."
           gptel-prompts-template-functions '(gptel-prompts-add-current-time
                                              gptel-prompts-current-project-variables))
     (gptel-prompts-update))
+
+  (defun my/gptel-remove-headings (beg end)
+    (when (derived-mode-p 'org-mode)
+      (save-excursion
+        (goto-char beg)
+        (while (re-search-forward org-heading-regexp end t)
+          (forward-line 0)
+          (delete-char (1+ (length (match-string 1))))
+          (insert-and-inherit "*")
+          (end-of-line)
+          (skip-chars-backward " \t\r")
+          (insert-and-inherit "*")))))
+  (add-hook! 'gptel-post-response-functions #'my/gptel-remove-headings)
 
   ;; DEFINE: Presets
   (gptel-make-preset 'default
@@ -357,7 +367,8 @@ The patch is applied relative to the project root."
          gptel-display-buffer-action nil
          gptel-expert-commands t
          gptel-use-tools t
-         gptel-include-tool-results t
+         gptel-include-tool-results 'auto
+         gptel-track-media t
          gptel-max-tokens 32000
          gptel--preset 'default
          gptel-backend (gptel-make-gemini "Gemini"
@@ -445,7 +456,7 @@ The patch is applied relative to the project root."
   '(gptel-context-highlight-face :background "#2C333F")
   '(line-number :italic nil)
   '(line-number-current-line :italic nil)
-  '(ts-fold-replacement-face :foreground nil :box nil :inherit font-lock-comment-face :weight light))
+  '(ts-fold-replacement-face :foreground unspecified :box nil :inherit font-lock-comment-face :weight light))
 
 (if (display-graphic-p)
     (progn
@@ -453,7 +464,7 @@ The patch is applied relative to the project root."
       (custom-theme-set-faces! 'doom-plain-dark '(default :background "#000000"))
       (custom-theme-set-faces! 'doom-nord '(default :background "#000000")))
   (progn
-    (custom-set-faces! '(default :background nil))
-    (custom-set-faces! '(ein:basecell-input-area-face :background nil))
-    (custom-theme-set-faces! 'doom-plain-dark '(default :background nil))
-    (custom-theme-set-faces! 'doom-nord '(default :background nil))))
+    (custom-set-faces! '(default :background unspecified))
+    (custom-set-faces! '(ein:basecell-input-area-face :background unspecified))
+    (custom-theme-set-faces! 'doom-plain-dark '(default :background unspecified))
+    (custom-theme-set-faces! 'doom-nord '(default :background unspecified))))
