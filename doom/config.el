@@ -123,25 +123,20 @@
   (lsp-defcustom lsp-ty-experimental-rename t
     "Enable the experimental support for renaming symbols in the editor."
     :type 'boolean
-    :group 'ty
+    :group 'ty-ls
     :lsp-path "ty.experimental.rename")
   (lsp-defcustom lsp-ty-experimental-auto-import t
     "Enable the experimental support for auto-import code completions."
     :type 'boolean
-    :group 'ty
-    :lsp-path "ty.experimental.autoImport")
-  (lsp-register-client
-   (make-lsp-client
-    :new-connection (lsp-stdio-connection '("uvx" "ty" "server"))
-    :activation-fn (lsp-activate-on "python")
-    :server-id 'ty
-    :priority -3
-    :add-on? t)))
+    :group 'ty-ls
+    :lsp-path "ty.experimental.autoImport"))
 
 (after! project
   (add-to-list 'project-vc-ignores "./.venv/"))
 
 (after! gptel
+  (require 'gptel-integrations)
+
   ;; DEFINE: LLMs
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
@@ -183,17 +178,24 @@
                            ("anthropic-beta" . "prompt-caching-2024-07-31")))))
 
   ;; DEFINE: Tools
-  (defun my/rg-tool (pattern &optional include path)
+  (defun my/rg-tool (search-pattern &optional glob path max-results)
     "Search for PATTERN in files in PATH using ripgrep."
+    (or max-results (setq max-results 200))
     (let* ((default-directory (doom-project-root))
            (search-path (shell-quote-argument (or path ".")))
-           (glob-arg (if include
-                         (format "-g %s" (shell-quote-argument include))
+           (glob-arg (if glob
+                         (format "-g %s" (shell-quote-argument glob))
                        ""))
-           (command (format "rg --color=never -n %s -- %s %s"
+           (max-lines-arg (if (>= max-results 0)
+                              (format " | head -n %s"
+                                      (shell-quote-argument
+                                       (number-to-string max-results)))
+                            ""))
+           (command (format "rg --color=never %s -n -- %s %s %s"
                             glob-arg
-                            (shell-quote-argument pattern)
-                            search-path))
+                            (shell-quote-argument search-pattern)
+                            search-path
+                            max-lines-arg))
            (result (shell-command-to-string command)))
       (if (string-empty-p result)
           "No matches found"
@@ -267,16 +269,17 @@ The patch is applied relative to the project root."
               :function my/rg-tool
               :category "filesystem"
               :description "Search file content using regex with ripgrep"
-              :args ((:name "pattern" :type string :description "Regex pattern to search in file contents")
-                     (:name "include" :type string :description "Pattern for files to include in search (e.g., \"*.py\")" :optional t)
-                     (:name "path" :type string :description "Directory to search in" :optional t)))
+              :args ((:name "search-pattern" :type string :description "Regex pattern to search in file contents")
+                     (:name "glob" :type string :description "Glob pattern for files to include in search (e.g., \"*.py\")" :optional t)
+                     (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)
+                     (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 200" :optional t)))
              (:name "fzf"
               :function my/fzf-tool
               :category "filesystem"
               :description "Fuzzy search for file names using fzf"
               :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names")
                      (:name "exact" :type boolean :description "Enable exact-match" :optional t)
-                     (:name "path" :type string :description "Directory to search in" :optional t)))
+                     (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)))
              (:name "cat"
               :function my/cat-file-tool
               :category "filesystem"
@@ -300,6 +303,11 @@ The patch is applied relative to the project root."
               :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))))
     (apply #'gptel-make-tool custom-tool-plist))
 
+  (use-package! mcp
+    :config (require 'mcp-hub)
+    :custom (mcp-hub-servers
+             '(("dash" . (:command "uvx"
+                          :args ("--from" "git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server"))))))
   ;; DEFINE: Prompts
   (defun gptel-prompts-current-project-variables (_file)
     `(("project_root" . ,(doom-project-root))
@@ -308,7 +316,7 @@ The patch is applied relative to the project root."
   (use-package! gptel-prompts
     :demand t
     :config
-    (setq gptel-prompts-directory "~/.doom.d/prompts/"
+    (setq gptel-prompts-directory (concat doom-user-dir "prompts/")
           gptel-prompts-template-functions '(gptel-prompts-add-current-time
                                              gptel-prompts-current-project-variables))
     (gptel-prompts-update))
@@ -326,6 +334,9 @@ The patch is applied relative to the project root."
           (insert-and-inherit "*")))))
   (add-hook! 'gptel-post-response-functions #'my/gptel-remove-headings)
 
+  (defun my/gptel-init-coding-mcp ()
+    (gptel-mcp-connect '("dash")))
+
   ;; DEFINE: Presets
   (gptel-make-preset 'default
     :description "Default preset"
@@ -338,6 +349,7 @@ The patch is applied relative to the project root."
     :backend "Gemini"
     :system (alist-get 'code-analysis gptel-directives)
     :model 'gemini-pro-latest
+    ;; :post #'my/gptel-init-coding-mcp
     :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer"))
   (gptel-make-preset 'programming
     :description "A preset optimized for coding tasks"
@@ -367,7 +379,7 @@ The patch is applied relative to the project root."
          gptel-display-buffer-action nil
          gptel-expert-commands t
          gptel-use-tools t
-         gptel-include-tool-results 'auto
+         gptel-include-tool-results t
          gptel-track-media t
          gptel-max-tokens 32000
          gptel--preset 'default

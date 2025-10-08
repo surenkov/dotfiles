@@ -58,12 +58,12 @@
 
 (unpin! gptel)
 (package! templatel)
+(package! mcp :recipe (:host github :repo "lizqwerscott/mcp.el"))
 (package! gptel-prompts :recipe (:host github :repo "jwiegley/gptel-prompts"))
 
 (package! gptel-magit :disable t)
 (package! gptel-quick :disable t)
 
-;;(package! dash-at-point)
 ;;(package! hledger-mode)
 ;;(package! k8s-mode)
 ;;(package! vue-mode)
