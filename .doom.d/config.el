@@ -142,6 +142,8 @@
   (add-to-list 'project-vc-ignores "./.venv/"))
 
 (after! gptel
+  (require 'gptel-integrations)
+
   ;; DEFINE: LLMs
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
@@ -300,6 +302,11 @@ The patch is applied relative to the project root."
               :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))))
     (apply #'gptel-make-tool custom-tool-plist))
 
+  (use-package! mcp
+    :config (require 'mcp-hub)
+    :custom (mcp-hub-servers
+             '(("dash" . (:command "uvx"
+                          :args ("--from" "git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server"))))))
   ;; DEFINE: Prompts
   (defun gptel-prompts-current-project-variables (_file)
     `(("project_root" . ,(doom-project-root))
@@ -326,6 +333,9 @@ The patch is applied relative to the project root."
           (insert-and-inherit "*")))))
   (add-hook! 'gptel-post-response-functions #'my/gptel-remove-headings)
 
+  (defun my/gptel-init-coding-mcp ()
+    (gptel-mcp-connect '("dash")))
+
   ;; DEFINE: Presets
   (gptel-make-preset 'default
     :description "Default preset"
@@ -338,6 +348,7 @@ The patch is applied relative to the project root."
     :backend "Gemini"
     :system (alist-get 'code-analysis gptel-directives)
     :model 'gemini-pro-latest
+    ;; :post #'my/gptel-init-coding-mcp
     :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer"))
   (gptel-make-preset 'programming
     :description "A preset optimized for coding tasks"
