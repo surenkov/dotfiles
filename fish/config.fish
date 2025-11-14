@@ -31,3 +31,4 @@ alias emstop="emacsclient -e '(kill-emacs)'"
 alias vim=nvim
 alias ipy=ipython3
 alias k=kubectl
+alias clickhouse='podman run --rm -it clickhouse-server:24.8-alpine clickhouse'

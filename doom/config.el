@@ -72,7 +72,9 @@
       dired-dwim-target t)
 
 (cond ((featurep :system 'macos) ;; mac specific settings
-       (setq insert-directory-program "/opt/homebrew/bin/gls")))
+       (setq insert-directory-program "/opt/homebrew/bin/gls")
+       (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t))
+       (add-to-list 'default-frame-alist '(ns-appearance . dark))))
 
 (connection-local-set-profile-variables
  'remote-direct-async-process
@@ -105,7 +107,7 @@
   (setq corfu-preview-current 'insert
         corfu-auto-delay 0.05))
 
-(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls pyright)
+(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls pyright zuban-ls)
       gc-cons-threshold (* 100 1024 1024)
       read-process-output-max (* 1024 1024)
       lsp-idle-delay 0.2
@@ -129,10 +131,21 @@
     "Enable the experimental support for auto-import code completions."
     :type 'boolean
     :group 'ty-ls
-    :lsp-path "ty.experimental.autoImport"))
+    :lsp-path "ty.experimental.autoImport")
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("zubanls"))
+    :activation-fn (lsp-activate-on "python")
+    :server-id 'zuban-ls
+    :priority -3
+    :add-on? t)))
 
 (after! project
   (add-to-list 'project-vc-ignores "./.venv/"))
+
+(after! agent-shell
+  (setq agent-shell-google-authentication
+        (agent-shell-google-make-authentication :login t)))
 
 (after! gptel
   (require 'gptel-integrations)
@@ -181,20 +194,18 @@
   (defun my/rg-tool (search-pattern &optional glob path max-results)
     "Search for PATTERN in files in PATH using ripgrep."
     (or max-results (setq max-results 200))
-    (let* ((default-directory (doom-project-root))
-           (search-path (shell-quote-argument (or path ".")))
-           (glob-arg (if glob
-                         (format "-g %s" (shell-quote-argument glob))
-                       ""))
+    (let* ((root (doom-project-root))
+           ;; Resolve path relative to project root, handling ~ expansion
+           (default-directory (if path (expand-file-name path root) root))
+           (glob-arg (if glob (format "-g %s" (shell-quote-argument glob)) ""))
            (max-lines-arg (if (>= max-results 0)
                               (format " | head -n %s"
-                                      (shell-quote-argument
-                                       (number-to-string max-results)))
+                                      (shell-quote-argument (number-to-string max-results)))
                             ""))
-           (command (format "rg --color=never %s -n -- %s %s %s"
+           ;; Run rg in the default-directory. Use "." to search current directory.
+           (command (format "rg --ignore-file ~/.config/git/ignore --color=never %s -n -- %s . %s"
                             glob-arg
                             (shell-quote-argument search-pattern)
-                            search-path
                             max-lines-arg))
            (result (shell-command-to-string command)))
       (if (string-empty-p result)
@@ -203,10 +214,11 @@
 
   (defun my/fzf-tool (pattern &optional exact path)
     "Fuzzy search for file names matching PATTERN in PATH using fzf."
-    (let* ((default-directory (doom-project-root))
-           (search-path (shell-quote-argument (or path ".")))
-           (command (format "rg --files %s | fzf --ansi --filter=%s %s"
-                            search-path
+    (let* ((root (doom-project-root))
+           ;; Resolve path relative to project root, handling ~ expansion
+           (default-directory (if path (expand-file-name path root) root))
+           ;; Run rg in the default-directory. No path argument needed.
+           (command (format "rg --ignore-file ~/.config/git/ignore --files | fzf --ansi --filter=%s %s"
                             (shell-quote-argument pattern)
                             (if exact "--exact" "")))
            (result (shell-command-to-string command)))
@@ -214,13 +226,28 @@
           "No matches found"
         result)))
 
-  (defun my/cat-file-tool (path)
-    "Read the contents of file at PATH and return it as a string."
-    (let ((default-directory (doom-project-root)))
+  (defun my/cat-file-tool (path &optional offset limit)
+    "Read the contents of file at PATH and return it as a string.
+OFFSET is the starting line number (1-based).
+LIMIT is the maximum number of lines to return."
+    (let ((default-directory (doom-project-root))
+          (offset (or offset 1))
+          (limit (or limit 2000)))
       (if (file-readable-p path)
           (with-temp-buffer
             (insert-file-contents path)
-            (buffer-string))
+            (let* ((total-lines (count-lines (point-min) (point-max)))
+                   (end-line (min (+ offset limit -1) total-lines)))
+              (goto-char (point-min))
+              (when (> offset 1)
+                (forward-line (1- offset)))
+              (let ((start (point)))
+                (forward-line limit)
+                (let ((content (buffer-substring-no-properties start (point))))
+                  (if (or (> offset 1) (< end-line total-lines))
+                      (format "%s\n[... File has %d lines. Showing lines %d-%d ...]"
+                              content total-lines offset end-line)
+                    content)))))
         (format "Error: File '%s' is not readable or does not exist." path))))
 
   (defun my/list-buffers-tool ()
@@ -246,7 +273,7 @@ LIMIT is the maximum number of lines to return."
                 (buffer-substring-no-properties start (point-max))))))
       (format "Error: Buffer '%s' does not exist." buffer-name)))
 
-  (defun my/git-apply-patch-tool (patch)
+  (defun my/apply-patch-tool (patch)
     "Apply a git-formatted PATCH string using `git apply'.
 The patch is applied relative to the project root."
     (let ((default-directory (doom-project-root)))
@@ -283,8 +310,10 @@ The patch is applied relative to the project root."
              (:name "cat"
               :function my/cat-file-tool
               :category "filesystem"
-              :description "Read the entire content of a file and return it as a string."
-              :args ((:name "path" :type string :description "Path to the file to read.")))
+              :description "Read the content of a file and return it as a string."
+              :args ((:name "path" :type string :description "Path to the file to read.")
+                     (:name "offset" :type integer :description "Line number to start reading from (1-based). Default: 1." :optional t)
+                     (:name "limit" :type integer :description "Maximum number of lines to return. Default: 2000." :optional t)))
              (:name "list_buffers"
               :function my/list-buffers-tool
               :category "emacs"
@@ -296,8 +325,8 @@ The patch is applied relative to the project root."
               :args ((:name "buffer-name" :type string :description "The name of the buffer to view.")
                      (:name "offset" :type integer :description "Line number to start reading from (1-based)." :optional t)
                      (:name "limit" :type integer :description "Maximum number of lines to return." :optional t)))
-             (:name "git_apply_patch"
-              :function my/git-apply-patch-tool
+             (:name "apply_patch"
+              :function my/apply-patch-tool
               :category "filesystem"
               :description "Apply a git-formatted PATCH string using `git apply'. The patch is applied relative to the project root."
               :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))))
@@ -306,8 +335,10 @@ The patch is applied relative to the project root."
   (use-package! mcp
     :config (require 'mcp-hub)
     :custom (mcp-hub-servers
-             '(("dash" . (:command "uvx"
-                          :args ("--from" "git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server"))))))
+             `(("git" . (:command "uvx" :args ("mcp-server-git")))
+               ("atlassian" . (:url "https://mcp.atlassian.com/v1/sse"))
+               ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp"))))))
+
   ;; DEFINE: Prompts
   (defun gptel-prompts-current-project-variables (_file)
     `(("project_root" . ,(doom-project-root))
@@ -355,7 +386,7 @@ The patch is applied relative to the project root."
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
     :system (alist-get 'programming gptel-directives)
-    :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer" "git_apply_patch"))
+    :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer" "apply_patch"))
   (gptel-make-preset 'gemini-grounded
     :description "Gemini with Google Search grounding"
     :parents 'default
