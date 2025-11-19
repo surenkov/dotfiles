@@ -123,15 +123,15 @@
 
 (after! lsp
   (lsp-defcustom lsp-ty-experimental-rename t
-    "Enable the experimental support for renaming symbols in the editor."
-    :type 'boolean
-    :group 'ty-ls
-    :lsp-path "ty.experimental.rename")
+                 "Enable the experimental support for renaming symbols in the editor."
+                 :type 'boolean
+                 :group 'ty-ls
+                 :lsp-path "ty.experimental.rename")
   (lsp-defcustom lsp-ty-experimental-auto-import t
-    "Enable the experimental support for auto-import code completions."
-    :type 'boolean
-    :group 'ty-ls
-    :lsp-path "ty.experimental.autoImport")
+                 "Enable the experimental support for auto-import code completions."
+                 :type 'boolean
+                 :group 'ty-ls
+                 :lsp-path "ty.experimental.autoImport")
   (lsp-register-client
    (make-lsp-client
     :new-connection (lsp-stdio-connection '("zubanls"))
@@ -154,13 +154,10 @@
   (gptel-make-ollama "Ollama"
     :host "localhost:11434"
     :stream t
-    :models '("gemma3:12b"
-              "gemma3:27b"
-              "gemma3n:latest"
-              "gpt-oss:20b"
-              "qwen3:30b-a3b"
-              "qwen3-coder:30b"
-              "deepseek-r1:32b"))
+    :request-params '(:options (:num_ctx 32000))
+    :models '("gemma3n:latest"
+              "gpt-oss:latest"
+              "qwen3-coder:latest"))
   (gptel-make-anthropic "Claude"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY"))
@@ -168,87 +165,103 @@
     :stream t
     :key (getenv "ANTHROPIC_API_KEY")
     :models '((claude-opus-4-1
-               :description "High-performance model with exceptional reasoning and efficiency"
-               :capabilities (media tool-use cache)
-               :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
-               :context-window 200
-               :input-cost 3
-               :output-cost 15
-               :cutoff-date "2025-03")
-              (claude-opus-4-0
                :description "Most capable model for complex reasoning and advanced coding"
                :capabilities (media tool-use cache)
                :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
                :context-window 200
                :input-cost 15
                :output-cost 75
-               :cutoff-date "2025-03"))
+               :cutoff-date "2025-03")
+              (claude-sonnet-4-5
+               :description "High-performance model with exceptional reasoning and efficiency"
+               :capabilities (media tool-use cache)
+               :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
+               :context-window 200
+               :input-cost 3
+               :output-cost 15
+               :cutoff-date "2025-07"))
     :request-params '(:thinking (:type "enabled" :budget_tokens 16384))
     :header (lambda () (when-let* ((key (gptel--get-api-key)))
                          `(("x-api-key" . ,key)
                            ("anthropic-version" . "2023-06-01")
                            ("anthropic-beta" . "pdfs-2024-09-25")
-                           ("anthropic-beta" . "prompt-caching-2024-07-31")))))
+                           ("anthropic-beta" . "extended-cache-ttl-2025-04-11")))))
 
   ;; DEFINE: Tools
+
   (defun my/rg-tool (search-pattern &optional glob path max-results)
     "Search for PATTERN in files in PATH using ripgrep."
-    (or max-results (setq max-results 200))
     (let* ((root (doom-project-root))
-           ;; Resolve path relative to project root, handling ~ expansion
            (default-directory (if path (expand-file-name path root) root))
+           (ignore-file (expand-file-name "~/.config/git/ignore"))
+           (ignore-arg (if (file-exists-p ignore-file)
+                           (format "--ignore-file %s" (shell-quote-argument ignore-file))
+                         ""))
            (glob-arg (if glob (format "-g %s" (shell-quote-argument glob)) ""))
+           (max-results (or max-results 50))
            (max-lines-arg (if (>= max-results 0)
                               (format " | head -n %s"
                                       (shell-quote-argument (number-to-string max-results)))
                             ""))
-           ;; Run rg in the default-directory. Use "." to search current directory.
-           (command (format "rg --ignore-file ~/.config/git/ignore --color=never %s -n -- %s . %s"
+           (command (format "rg %s --color=never %s -n -- %s . %s"
+                            ignore-arg
                             glob-arg
                             (shell-quote-argument search-pattern)
                             max-lines-arg))
            (result (shell-command-to-string command)))
-      (if (string-empty-p result)
-          "No matches found"
-        result)))
+      (if (string-empty-p result) "No matches found" result)))
 
-  (defun my/fzf-tool (pattern &optional exact path)
+  (defun my/fzf-tool (pattern &optional exact path depth max-results)
     "Fuzzy search for file names matching PATTERN in PATH using fzf."
     (let* ((root (doom-project-root))
-           ;; Resolve path relative to project root, handling ~ expansion
            (default-directory (if path (expand-file-name path root) root))
-           ;; Run rg in the default-directory. No path argument needed.
-           (command (format "rg --ignore-file ~/.config/git/ignore --files | fzf --ansi --filter=%s %s"
+           (depth-arg (if (and depth (integerp depth)) (format "-d %d" depth) ""))
+           (max-results (or max-results 50))
+           (ignore-file (expand-file-name "~/.config/git/ignore"))
+           (ignore-arg (if (file-exists-p ignore-file)
+                           (format "--ignore-file %s" (shell-quote-argument ignore-file))
+                         ""))
+           (max-lines-arg (if (>= max-results 0)
+                              (format " | head -n %s"
+                                      (shell-quote-argument (number-to-string max-results)))
+                            ""))
+           (command (format "rg %s --files %s | fzf --ansi --filter=%s %s %s"
+                            ignore-arg
+                            depth-arg
                             (shell-quote-argument pattern)
-                            (if exact "--exact" "")))
+                            (if exact "--exact" "")
+                            max-lines-arg))
            (result (shell-command-to-string command)))
-      (if (string-empty-p result)
-          "No matches found"
-        result)))
+      (if (string-empty-p result) "No matches found" result)))
 
   (defun my/cat-file-tool (path &optional offset limit)
-    "Read the contents of file at PATH and return it as a string.
-OFFSET is the starting line number (1-based).
-LIMIT is the maximum number of lines to return."
+    "Read the contents of file at PATH and return it as a string."
     (let ((default-directory (doom-project-root))
           (offset (or offset 1))
-          (limit (or limit 2000)))
-      (if (file-readable-p path)
-          (with-temp-buffer
-            (insert-file-contents path)
-            (let* ((total-lines (count-lines (point-min) (point-max)))
-                   (end-line (min (+ offset limit -1) total-lines)))
-              (goto-char (point-min))
-              (when (> offset 1)
-                (forward-line (1- offset)))
-              (let ((start (point)))
-                (forward-line limit)
-                (let ((content (buffer-substring-no-properties start (point))))
-                  (if (or (> offset 1) (< end-line total-lines))
-                      (format "%s\n[... File has %d lines. Showing lines %d-%d ...]"
-                              content total-lines offset end-line)
-                    content)))))
-        (format "Error: File '%s' is not readable or does not exist." path))))
+          (limit (or limit 2000))
+          ;; SAFETY: Prevent freezing on massive files (e.g., >10MB)
+          (max-size (* 10 1024 1024)))
+      (cond
+       ((not (file-readable-p path))
+        (format "Error: File '%s' is not readable or does not exist." path))
+       ((> (file-attribute-size (file-attributes path)) max-size)
+        (format "Error: File '%s' is too large (%.2f MB). Limit is 10MB."
+                path (/ (file-attribute-size (file-attributes path)) 1048576.0)))
+       (t
+        (with-temp-buffer
+          (insert-file-contents path)
+          (let* ((total-lines (count-lines (point-min) (point-max)))
+                 (end-line (min (+ offset limit -1) total-lines)))
+            (goto-char (point-min))
+            (when (> offset 1)
+              (forward-line (1- offset)))
+            (let ((start (point)))
+              (forward-line limit)
+              (let ((content (buffer-substring-no-properties start (point))))
+                (if (or (> offset 1) (< end-line total-lines))
+                    (format "%s\n[... File has %d lines. Showing lines %d-%d ...]"
+                            content total-lines offset end-line)
+                  content)))))))))
 
   (defun my/list-buffers-tool ()
     "List open Emacs buffers."
@@ -283,7 +296,14 @@ The patch is applied relative to the project root."
           (unwind-protect
               (condition-case err
                   ;; Use "-" to read patch from stdin.
-                  (let ((exit-code (call-process-region (point-min) (point-max) "git" nil output-buffer t "apply" "--" "-")))
+                  (let ((exit-code (call-process-region
+                                    (point-min) (point-max)
+                                    "git" nil output-buffer t
+                                    "apply"
+                                    "--ignore-space-change"
+                                    "--ignore-whitespace"
+                                    "--inaccurate-eof"
+                                    "--" "-")))
                     (with-current-buffer output-buffer
                       (if (zerop exit-code)
                           "Patch applied successfully."
@@ -299,14 +319,16 @@ The patch is applied relative to the project root."
               :args ((:name "search-pattern" :type string :description "Regex pattern to search in file contents")
                      (:name "glob" :type string :description "Glob pattern for files to include in search (e.g., \"*.py\")" :optional t)
                      (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)
-                     (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 200" :optional t)))
+                     (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 50. Set to -1 for no limit." :optional t)))
              (:name "fzf"
               :function my/fzf-tool
               :category "filesystem"
               :description "Fuzzy search for file names using fzf"
               :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names")
                      (:name "exact" :type boolean :description "Enable exact-match" :optional t)
-                     (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)))
+                     (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)
+                     (:name "depth" :type integer :description "Limit the traversal depth, if specified. Do not limit by default." :optional t)
+                     (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 50. Set to -1 for no limit." :optional t)))
              (:name "cat"
               :function my/cat-file-tool
               :category "filesystem"
@@ -365,22 +387,16 @@ The patch is applied relative to the project root."
           (insert-and-inherit "*")))))
   (add-hook! 'gptel-post-response-functions #'my/gptel-remove-headings)
 
-  (defun my/gptel-init-coding-mcp ()
-    (gptel-mcp-connect '("dash")))
-
   ;; DEFINE: Presets
   (gptel-make-preset 'default
     :description "Default preset"
     :backend "Gemini"
     :system (alist-get 'default gptel-directives)
-    :model 'gemini-pro-latest
     :tools nil)
   (gptel-make-preset 'code-analysis
     :description "A preset optimized for read-only coding tasks"
     :backend "Gemini"
     :system (alist-get 'code-analysis gptel-directives)
-    :model 'gemini-pro-latest
-    ;; :post #'my/gptel-init-coding-mcp
     :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer"))
   (gptel-make-preset 'programming
     :description "A preset optimized for coding tasks"
@@ -417,7 +433,7 @@ The patch is applied relative to the project root."
          gptel-backend (gptel-make-gemini "Gemini"
                          :stream t
                          :key (getenv "GOOGLE_GENAI_API_KEY"))
-         gptel-model 'gemini-pro-latest
+         gptel-model 'gemini-3-pro-preview
          gptel-default-mode 'org-mode
          gptel-log-level 'info
          gptel-use-context 'user))
