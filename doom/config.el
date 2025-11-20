@@ -44,7 +44,7 @@
 
       truncate-string-ellipsis "…"
       scroll-margin 3
-      evil-want-fine-undo t
+      ;; evil-want-fine-undo t
       undo-limit 8000000
       shell-file-name (executable-find "bash")
 
@@ -160,36 +160,32 @@
               "qwen3-coder:latest"))
   (gptel-make-anthropic "Claude"
     :stream t
-    :key (getenv "ANTHROPIC_API_KEY"))
-  (gptel-make-anthropic "Claude-Thinking"
-    :stream t
     :key (getenv "ANTHROPIC_API_KEY")
-    :models '((claude-opus-4-1
-               :description "Most capable model for complex reasoning and advanced coding"
-               :capabilities (media tool-use cache)
-               :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
-               :context-window 200
-               :input-cost 15
-               :output-cost 75
-               :cutoff-date "2025-03")
-              (claude-sonnet-4-5
-               :description "High-performance model with exceptional reasoning and efficiency"
-               :capabilities (media tool-use cache)
-               :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
-               :context-window 200
-               :input-cost 3
-               :output-cost 15
-               :cutoff-date "2025-07"))
-    :request-params '(:thinking (:type "enabled" :budget_tokens 16384))
-    :header (lambda () (when-let* ((key (gptel--get-api-key)))
-                         `(("x-api-key" . ,key)
-                           ("anthropic-version" . "2023-06-01")
-                           ("anthropic-beta" . "pdfs-2024-09-25")
-                           ("anthropic-beta" . "extended-cache-ttl-2025-04-11")))))
+    :request-params `(:thinking (:type "enabled" :budget_tokens 10000)
+                      :context_management (:edits [(:type "clear_thinking_20251015")
+                                                   (:type "clear_tool_uses_20250919")]))
+    :header (lambda () (when-let* ((key (getenv "ANTHROPIC_API_KEY")))
+                   `(("x-api-key" . ,key)
+                     ("anthropic-version" . "2023-06-01")
+                     ("anthropic-beta" . "extended-cache-ttl-2025-04-11")
+                     ("anthropic-beta" . "context-management-2025-06-27")))))
 
   ;; DEFINE: Tools
+  (defun my/list-files-tool (path &optional recursive)
+    "List files in PATH using fd. Respects .gitignore."
+    (let* ((default-directory (doom-project-root))
+           (full-path (expand-file-name (or path ".")))
+           (rel-path (file-relative-name full-path default-directory)))
+      (if (not (string-prefix-p (string-trim-right default-directory "/") full-path))
+          (format "Error: Access denied. %s is outside project root." path)
+        (if (not (file-exists-p full-path))
+            (format "Error: Path '%s' does not exist." path)
+          (shell-command-to-string
+           (format "fd --color=never %s . %s"
+                   (if (or (null recursive) (eq recursive :json-false)) "--max-depth 1" "")
+                   (shell-quote-argument rel-path)))))))
 
-  (defun my/rg-tool (search-pattern &optional glob path max-results)
+  (defun my/rg-tool (search-pattern &optional glob path max-results context)
     "Search for PATTERN in files in PATH using ripgrep."
     (let* ((root (doom-project-root))
            (default-directory (if path (expand-file-name path root) root))
@@ -203,10 +199,12 @@
                               (format " | head -n %s"
                                       (shell-quote-argument (number-to-string max-results)))
                             ""))
-           (command (format "rg %s --color=never %s -n -- %s . %s"
+           (context-arg (if context (format "-C %d" context) ""))
+           (command (format "rg %s --color=never --max-columns=500 --max-columns-preview %s -n -- %s . %s %s"
                             ignore-arg
                             glob-arg
                             (shell-quote-argument search-pattern)
+                            context-arg
                             max-lines-arg))
            (result (shell-command-to-string command)))
       (if (string-empty-p result) "No matches found" result)))
@@ -263,29 +261,6 @@
                             content total-lines offset end-line)
                   content)))))))))
 
-  (defun my/list-buffers-tool ()
-    "List open Emacs buffers."
-    (let ((buffers (cl-remove-if-not #'buffer-file-name (buffer-list))))
-      (mapconcat #'buffer-name buffers "\n")))
-
-  (defun my/read-buffer-tool (buffer-name &optional offset limit)
-    "Return content of BUFFER-NAME with optional OFFSET and LIMIT.
-OFFSET is the starting line number (1-based).
-LIMIT is the maximum number of lines to return."
-    (if-let ((buffer (get-buffer buffer-name)))
-        (with-current-buffer buffer
-          (save-excursion
-            (goto-char (point-min))
-            (when (and offset (numberp offset) (> offset 0))
-              (forward-line (1- offset)))
-            (let ((start (point)))
-              (if (and limit (numberp limit) (> limit 0))
-                  (progn
-                    (forward-line limit)
-                    (buffer-substring-no-properties start (point)))
-                (buffer-substring-no-properties start (point-max))))))
-      (format "Error: Buffer '%s' does not exist." buffer-name)))
-
   (defun my/apply-patch-tool (patch)
     "Apply a git-formatted PATCH string using `git apply'.
 The patch is applied relative to the project root."
@@ -311,22 +286,47 @@ The patch is applied relative to the project root."
                 (format "Error executing 'git apply': %s" (error-message-string err)))
             (kill-buffer output-buffer))))))
 
+  (defun my/read-url-tool (url)
+    "Fetch content from a URL."
+    (with-current-buffer (url-retrieve-synchronously url)
+      (goto-char (point-min))
+      (re-search-forward "^$" nil 'move)
+      (forward-char)
+      (let ((content (buffer-substring-no-properties (point) (point-max))))
+        ;; Simple cleanup to reduce token usage
+        (with-temp-buffer
+          (insert content)
+          (shr-render-region (point-min) (point-max))
+          (buffer-string)))))
+
+  (defun my/run-command-tool (command)
+    "Run a shell command in the project root and return output."
+    (let ((default-directory (doom-project-root)))
+      (shell-command-to-string command)))
+
   (dolist (custom-tool-plist
-           '((:name "rg"
+           '((:name "fd"
+              :function my/list-files-tool
+              :category "filesystem"
+              :description "List directories in a path using `fd'."
+              :args ((:name "path" :type string :description "Directory path relative to project root.")
+                     (:name "recursive" :type boolean :description "List subdirectories recursively, if argument is present. Default is false" :optional t)))
+             (:name "rg"
               :function my/rg-tool
               :category "filesystem"
               :description "Search file content using regex with ripgrep"
               :args ((:name "search-pattern" :type string :description "Regex pattern to search in file contents")
                      (:name "glob" :type string :description "Glob pattern for files to include in search (e.g., \"*.py\")" :optional t)
                      (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)
+                     (:name "context" :type integer :description "Show NUM lines before and after each match. Default is to show only a matching line." :optional t)
                      (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 50. Set to -1 for no limit." :optional t)))
              (:name "fzf"
               :function my/fzf-tool
               :category "filesystem"
               :description "Fuzzy search for file names using fzf"
-              :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names")
-                     (:name "exact" :type boolean :description "Enable exact-match" :optional t)
-                     (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)
+              :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names. Empty string to match all files.")
+                     (:name "exact" :type boolean :description "Enable exact-match." :optional t)
+                     (:name "path" :type string :description "Directory to search in. Default is a project root." :optional t)
                      (:name "depth" :type integer :description "Limit the traversal depth, if specified. Do not limit by default." :optional t)
                      (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 50. Set to -1 for no limit." :optional t)))
              (:name "cat"
@@ -336,22 +336,24 @@ The patch is applied relative to the project root."
               :args ((:name "path" :type string :description "Path to the file to read.")
                      (:name "offset" :type integer :description "Line number to start reading from (1-based). Default: 1." :optional t)
                      (:name "limit" :type integer :description "Maximum number of lines to return. Default: 2000." :optional t)))
-             (:name "list_buffers"
-              :function my/list-buffers-tool
-              :category "emacs"
-              :description "Lists currently open buffers in Emacs.")
-             (:name "read_buffer"
-              :function my/read-buffer-tool
-              :category "emacs"
-              :description "Return content of BUFFER-NAME with optional OFFSET and LIMIT. OFFSET is the starting line number (1-based). LIMIT is the maximum number of lines to return."
-              :args ((:name "buffer-name" :type string :description "The name of the buffer to view.")
-                     (:name "offset" :type integer :description "Line number to start reading from (1-based)." :optional t)
-                     (:name "limit" :type integer :description "Maximum number of lines to return." :optional t)))
              (:name "apply_patch"
               :function my/apply-patch-tool
               :category "filesystem"
+              :confirm t
               :description "Apply a git-formatted PATCH string using `git apply'. The patch is applied relative to the project root."
-              :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))))
+              :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))
+             (:name "run_cmd"
+              :function my/run-command-tool
+              :category "system"
+              :confirm t
+              :description "Run a shell command to verify build/tests."
+              :args ((:name "command" :type string :description "A shell command to run. Only safe commands are allowed.")))
+             (:name "read_url"
+              :function my/read-url-tool
+              :confirm t
+              :category "network"
+              :description "Fetch and read the visible text content of a URL."
+              :args ((:name "url" :type string :description "The URL to fetch.")))))
     (apply #'gptel-make-tool custom-tool-plist))
 
   (use-package! mcp
@@ -359,6 +361,7 @@ The patch is applied relative to the project root."
     :custom (mcp-hub-servers
              `(("git" . (:command "uvx" :args ("mcp-server-git")))
                ("atlassian" . (:url "https://mcp.atlassian.com/v1/sse"))
+               ;; ("dash" . (:command "uvx" :args ("--from" "git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server")))
                ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp"))))))
 
   ;; DEFINE: Prompts
@@ -366,12 +369,31 @@ The patch is applied relative to the project root."
     `(("project_root" . ,(doom-project-root))
       ("current_directory" . ,default-directory)))
 
+  (defun gptel-prompts-project-agents-instructions (_file)
+    "Read agent's instructiosn from the project root and return it as list."
+    `(("project_agents_instructions" . ,(cl-loop
+                                         for item in '("AGENTS.md" "GEMINI.md" "CLAUDE.md")
+                                         for path = (expand-file-name item (doom-project-root))
+                                         when (file-readable-p path)
+                                         collect (with-temp-buffer
+                                                  (insert-file-contents path)
+                                                  (buffer-string))))))
+  (defun gptel-prompts-filter-nindent (content n)
+    "Indent each line of CONTENT with N spaces."
+    (replace-regexp-in-string "^" (make-string n ?\s) content))
+
+  (defun gptel-prompts-add-filters (env)
+    "Add the `nindent' filter to the templatel environment."
+    (templatel-env-add-filter env "nindent" #'gptel-prompts-filter-nindent))
+
   (use-package! gptel-prompts
     :demand t
     :config
     (setq gptel-prompts-directory (concat doom-user-dir "prompts/")
           gptel-prompts-template-functions '(gptel-prompts-add-current-time
-                                             gptel-prompts-current-project-variables))
+                                             gptel-prompts-current-project-variables
+                                             gptel-prompts-project-agents-instructions))
+    (add-hook 'gptel-prompts-prepare-template-env-functions #'gptel-prompts-add-filters)
     (gptel-prompts-update))
 
   (defun my/gptel-remove-headings (beg end)
@@ -397,12 +419,12 @@ The patch is applied relative to the project root."
     :description "A preset optimized for read-only coding tasks"
     :backend "Gemini"
     :system (alist-get 'code-analysis gptel-directives)
-    :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer"))
+    :tools '("fd" "fzf" "rg" "cat" "read_url"))
   (gptel-make-preset 'programming
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
     :system (alist-get 'programming gptel-directives)
-    :tools '("fzf" "rg" "cat" "list_buffers" "read_buffer" "apply_patch"))
+    :tools '("fd" "fzf" "rg" "cat" "apply_patch" "read_url" "run_cmd"))
   (gptel-make-preset 'gemini-grounded
     :description "Gemini with Google Search grounding"
     :parents 'default
@@ -423,12 +445,13 @@ The patch is applied relative to the project root."
     :ttl nil)
 
   (setq! gptel-api-key (getenv "OPENAI_API_KEY")
+         gptel-temperature 1.0
          gptel-display-buffer-action nil
          gptel-expert-commands t
+         gptel-max-tokens 64000
          gptel-use-tools t
          gptel-include-tool-results t
          gptel-track-media t
-         gptel-max-tokens 32000
          gptel--preset 'default
          gptel-backend (gptel-make-gemini "Gemini"
                          :stream t

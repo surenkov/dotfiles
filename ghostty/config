@@ -45,6 +45,10 @@
 shell-integration = fish
 shell-integration-features = no-cursor
 
+window-save-state=always
+window-height=27
+window-width=100
+
 theme = "nord"
 background = #171A21
 foreground = #D8DEE9
