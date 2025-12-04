@@ -360,9 +360,15 @@ The patch is applied relative to the project root."
     :config (require 'mcp-hub)
     :custom (mcp-hub-servers
              `(("git" . (:command "uvx" :args ("mcp-server-git")))
-               ("atlassian" . (:url "https://mcp.atlassian.com/v1/sse"))
-               ;; ("dash" . (:command "uvx" :args ("--from" "git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server")))
-               ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp"))))))
+               ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp")))
+               ("playwright" . (:command "bunx" :args ("--bun" "@playwright/mcp" "--browser" "webkit")))
+               ("atlassian" . (:command "podman"
+                               :args ("run" "-i" "--rm"
+                                      "-e" "CONFLUENCE_*"
+                                      "-e" "JIRA_*"
+                                      "-e" "ENABLED_TOOLS"
+                                      "mcp/atlassian")
+                               :env (:ENABLED_TOOLS "jira_search,jira_get_issue,confluence_search,confluence_get_page"))))))
 
   ;; DEFINE: Prompts
   (defun gptel-prompts-current-project-variables (_file)
