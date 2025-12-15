@@ -275,8 +275,9 @@ The patch is applied relative to the project root."
                                     (point-min) (point-max)
                                     "git" nil output-buffer t
                                     "apply"
+                                    "--verbose"
+                                    "--recount"
                                     "--ignore-space-change"
-                                    "--ignore-whitespace"
                                     "--inaccurate-eof"
                                     "--" "-")))
                     (with-current-buffer output-buffer
@@ -425,7 +426,7 @@ The patch is applied relative to the project root."
     :description "A preset optimized for read-only coding tasks"
     :backend "Gemini"
     :system (alist-get 'code-analysis gptel-directives)
-    :tools '("fd" "fzf" "rg" "cat" "read_url"))
+    :tools '("fd" "fzf" "rg" "cat"))
   (gptel-make-preset 'programming
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
