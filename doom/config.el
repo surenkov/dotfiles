@@ -123,15 +123,15 @@
 
 (after! lsp
   (lsp-defcustom lsp-ty-experimental-rename t
-                 "Enable the experimental support for renaming symbols in the editor."
-                 :type 'boolean
-                 :group 'ty-ls
-                 :lsp-path "ty.experimental.rename")
+    "Enable the experimental support for renaming symbols in the editor."
+    :type 'boolean
+    :group 'ty-ls
+    :lsp-path "ty.experimental.rename")
   (lsp-defcustom lsp-ty-experimental-auto-import t
-                 "Enable the experimental support for auto-import code completions."
-                 :type 'boolean
-                 :group 'ty-ls
-                 :lsp-path "ty.experimental.autoImport")
+    "Enable the experimental support for auto-import code completions."
+    :type 'boolean
+    :group 'ty-ls
+    :lsp-path "ty.experimental.autoImport")
   (lsp-register-client
    (make-lsp-client
     :new-connection (lsp-stdio-connection '("zubanls"))
@@ -165,10 +165,10 @@
                       :context_management (:edits [(:type "clear_thinking_20251015")
                                                    (:type "clear_tool_uses_20250919")]))
     :header (lambda () (when-let* ((key (getenv "ANTHROPIC_API_KEY")))
-                   `(("x-api-key" . ,key)
-                     ("anthropic-version" . "2023-06-01")
-                     ("anthropic-beta" . "extended-cache-ttl-2025-04-11")
-                     ("anthropic-beta" . "context-management-2025-06-27")))))
+                         `(("x-api-key" . ,key)
+                           ("anthropic-version" . "2023-06-01")
+                           ("anthropic-beta" . "extended-cache-ttl-2025-04-11")
+                           ("anthropic-beta" . "context-management-2025-06-27")))))
 
   ;; DEFINE: Tools
   (defun my/list-files-tool (path &optional recursive)
@@ -187,24 +187,28 @@
 
   (defun my/rg-tool (search-pattern &optional glob path max-results context)
     "Search for PATTERN in files in PATH using ripgrep."
-    (let* ((root (doom-project-root))
-           (default-directory (if path (expand-file-name path root) root))
+    (let* ((default-directory (doom-project-root))
            (ignore-file (expand-file-name "~/.config/git/ignore"))
+           (base-flags "--color=never --max-columns=500 --max-columns-preview --with-filename --no-heading -n")
            (ignore-arg (if (file-exists-p ignore-file)
                            (format "--ignore-file %s" (shell-quote-argument ignore-file))
                          ""))
+           (path-arg (if (and path (not (string-empty-p path)))
+                         (shell-quote-argument path)
+                       ""))
            (glob-arg (if glob (format "-g %s" (shell-quote-argument glob)) ""))
+           (context-arg (if context (format "-C %d" context) ""))
            (max-results (or max-results 50))
            (max-lines-arg (if (>= max-results 0)
-                              (format " | head -n %s"
-                                      (shell-quote-argument (number-to-string max-results)))
+                              (format "| head -n %s" (number-to-string max-results))
                             ""))
-           (context-arg (if context (format "-C %d" context) ""))
-           (command (format "rg %s --color=never --max-columns=500 --max-columns-preview %s -n -- %s . %s %s"
+           (command (format "rg %s %s %s %s -- %s %s %s"
+                            base-flags
                             ignore-arg
                             glob-arg
-                            (shell-quote-argument search-pattern)
                             context-arg
+                            (shell-quote-argument search-pattern)
+                            path-arg
                             max-lines-arg))
            (result (shell-command-to-string command)))
       (if (string-empty-p result) "No matches found" result)))
@@ -278,7 +282,6 @@ The patch is applied relative to the project root."
                                     "--verbose"
                                     "--recount"
                                     "--ignore-space-change"
-                                    "--inaccurate-eof"
                                     "--" "-")))
                     (with-current-buffer output-buffer
                       (if (zerop exit-code)
@@ -318,7 +321,7 @@ The patch is applied relative to the project root."
               :description "Search file content using regex with ripgrep"
               :args ((:name "search-pattern" :type string :description "Regex pattern to search in file contents")
                      (:name "glob" :type string :description "Glob pattern for files to include in search (e.g., \"*.py\")" :optional t)
-                     (:name "path" :type string :description "Directory to search in. Default is a project root" :optional t)
+                     (:name "path" :type string :description "Path to a file or a directory to search in. Default is a project root" :optional t)
                      (:name "context" :type integer :description "Show NUM lines before and after each match. Default is to show only a matching line." :optional t)
                      (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 50. Set to -1 for no limit." :optional t)))
              (:name "fzf"
@@ -383,8 +386,8 @@ The patch is applied relative to the project root."
                                          for path = (expand-file-name item (doom-project-root))
                                          when (file-readable-p path)
                                          collect (with-temp-buffer
-                                                  (insert-file-contents path)
-                                                  (buffer-string))))))
+                                                   (insert-file-contents path)
+                                                   (buffer-string))))))
   (defun gptel-prompts-filter-nindent (content n)
     "Indent each line of CONTENT with N spaces."
     (replace-regexp-in-string "^" (make-string n ?\s) content))
@@ -431,7 +434,7 @@ The patch is applied relative to the project root."
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
     :system (alist-get 'programming gptel-directives)
-    :tools '("fd" "fzf" "rg" "cat" "apply_patch" "read_url" "run_cmd"))
+    :tools '("fd" "fzf" "rg" "cat" "apply_patch" "run_cmd"))
   (gptel-make-preset 'gemini-grounded
     :description "Gemini with Google Search grounding"
     :parents 'default
