@@ -123,15 +123,15 @@
 
 (after! lsp
   (lsp-defcustom lsp-ty-experimental-rename t
-    "Enable the experimental support for renaming symbols in the editor."
-    :type 'boolean
-    :group 'ty-ls
-    :lsp-path "ty.experimental.rename")
+                 "Enable the experimental support for renaming symbols in the editor."
+                 :type 'boolean
+                 :group 'ty-ls
+                 :lsp-path "ty.experimental.rename")
   (lsp-defcustom lsp-ty-experimental-auto-import t
-    "Enable the experimental support for auto-import code completions."
-    :type 'boolean
-    :group 'ty-ls
-    :lsp-path "ty.experimental.autoImport")
+                 "Enable the experimental support for auto-import code completions."
+                 :type 'boolean
+                 :group 'ty-ls
+                 :lsp-path "ty.experimental.autoImport")
   (lsp-register-client
    (make-lsp-client
     :new-connection (lsp-stdio-connection '("zubanls"))
@@ -171,70 +171,28 @@
                            ("anthropic-beta" . "context-management-2025-06-27")))))
 
   ;; DEFINE: Tools
-  (defun my/list-files-tool (path &optional recursive)
-    "List files in PATH using fd. Respects .gitignore."
+  (defun my/exec-async (name command callback &optional input)
+    "Generic helper to run a process asynchronously.
+NAME is the process name, COMMAND is the list of args,
+CALLBACK is called with (exit-code output), and optional INPUT is sent to stdin."
     (let* ((default-directory (doom-project-root))
-           (full-path (expand-file-name (or path ".")))
-           (rel-path (file-relative-name full-path default-directory)))
-      (if (not (string-prefix-p (string-trim-right default-directory "/") full-path))
-          (format "Error: Access denied. %s is outside project root." path)
-        (if (not (file-exists-p full-path))
-            (format "Error: Path '%s' does not exist." path)
-          (shell-command-to-string
-           (format "fd --color=never %s . %s"
-                   (if (or (null recursive) (eq recursive :json-false)) "--max-depth 1" "")
-                   (shell-quote-argument rel-path)))))))
-
-  (defun my/rg-tool (search-pattern &optional glob path max-results context)
-    "Search for PATTERN in files in PATH using ripgrep."
-    (let* ((default-directory (doom-project-root))
-           (ignore-file (expand-file-name "~/.config/git/ignore"))
-           (base-flags "--color=never --max-columns=500 --max-columns-preview --with-filename --no-heading -n")
-           (ignore-arg (if (file-exists-p ignore-file)
-                           (format "--ignore-file %s" (shell-quote-argument ignore-file))
-                         ""))
-           (path-arg (if (and path (not (string-empty-p path)))
-                         (shell-quote-argument path)
-                       ""))
-           (glob-arg (if glob (format "-g %s" (shell-quote-argument glob)) ""))
-           (context-arg (if context (format "-C %d" context) ""))
-           (max-results (or max-results 50))
-           (max-lines-arg (if (>= max-results 0)
-                              (format "| head -n %s" (number-to-string max-results))
-                            ""))
-           (command (format "rg %s %s %s %s -- %s %s %s"
-                            base-flags
-                            ignore-arg
-                            glob-arg
-                            context-arg
-                            (shell-quote-argument search-pattern)
-                            path-arg
-                            max-lines-arg))
-           (result (shell-command-to-string command)))
-      (if (string-empty-p result) "No matches found" result)))
-
-  (defun my/fzf-tool (pattern &optional exact path depth max-results)
-    "Fuzzy search for file names matching PATTERN in PATH using fzf."
-    (let* ((root (doom-project-root))
-           (default-directory (if path (expand-file-name path root) root))
-           (depth-arg (if (and depth (integerp depth)) (format "-d %d" depth) ""))
-           (max-results (or max-results 50))
-           (ignore-file (expand-file-name "~/.config/git/ignore"))
-           (ignore-arg (if (file-exists-p ignore-file)
-                           (format "--ignore-file %s" (shell-quote-argument ignore-file))
-                         ""))
-           (max-lines-arg (if (>= max-results 0)
-                              (format " | head -n %s"
-                                      (shell-quote-argument (number-to-string max-results)))
-                            ""))
-           (command (format "rg %s --files %s | fzf --ansi --filter=%s %s %s"
-                            ignore-arg
-                            depth-arg
-                            (shell-quote-argument pattern)
-                            (if exact "--exact" "")
-                            max-lines-arg))
-           (result (shell-command-to-string command)))
-      (if (string-empty-p result) "No matches found" result)))
+           (output-buffer (generate-new-buffer (format "*%s*" name)))
+           (proc (make-process
+                  :name name
+                  :buffer output-buffer
+                  :command (remq nil command)
+                  :connection-type (if input 'pipe 'pty)
+                  :sentinel
+                  (lambda (proc _event)
+                    (when (memq (process-status proc) '(exit signal))
+                      (let ((exit-code (process-exit-status proc))
+                            (output (with-current-buffer output-buffer
+                                      (string-trim (buffer-string)))))
+                        (kill-buffer output-buffer)
+                        (funcall callback exit-code output)))))))
+      (when input
+        (process-send-string proc input)
+        (process-send-eof proc))))
 
   (defun my/cat-file-tool (path &optional offset limit)
     "Read the contents of file at PATH and return it as a string."
@@ -265,60 +223,154 @@
                             content total-lines offset end-line)
                   content)))))))))
 
-  (defun my/apply-patch-tool (patch)
-    "Apply a git-formatted PATCH string using `git apply'.
-The patch is applied relative to the project root."
-    (let ((default-directory (doom-project-root)))
-      (with-temp-buffer
-        (insert (if (string-suffix-p hard-newline patch) patch (concat patch hard-newline)))
-        (let ((output-buffer (generate-new-buffer "*git-apply-output*")))
-          (unwind-protect
-              (condition-case err
-                  ;; Use "-" to read patch from stdin.
-                  (let ((exit-code (call-process-region
-                                    (point-min) (point-max)
-                                    "git" nil output-buffer t
-                                    "apply"
-                                    "--verbose"
-                                    "--recount"
-                                    "--ignore-space-change"
-                                    "--" "-")))
-                    (with-current-buffer output-buffer
-                      (if (zerop exit-code)
-                          "Patch applied successfully."
-                        (format "Error applying patch (exit code %d):\n%s" exit-code (buffer-string)))))
-                (format "Error executing 'git apply': %s" (error-message-string err)))
-            (kill-buffer output-buffer))))))
+  (defun my/list-files-tool (callback path &optional depth)
+    "List files in PATH using fd. Respects .gitignore.
+DEPTH is the directory traversal limit (integer).
+- Default (nil/1): List immediate children only.
+- -1: List recursively (no limit)."
+    (let* ((default-directory (doom-project-root))
+           (full-path (expand-file-name (or path ".") default-directory))
+           (rel-path (file-relative-name full-path default-directory)))
+      ;; Security: Ensure resolved path is within project root
+      (if (not (or (file-equal-p full-path default-directory)
+                   (string-prefix-p (expand-file-name default-directory)
+                                    (expand-file-name full-path))))
+          (funcall callback (format "Error: Access denied. '%s' is outside project root." path))
+        (if (not (file-exists-p full-path))
+            (funcall callback (format "Error: Path '%s' does not exist." rel-path))
+          ;; Handle :json-false (from LLM) or nil as default (1)
+          (let* ((depth-val (if (and (integerp depth) (not (eq depth :json-false))) depth 1))
+                 (command (list "fd"
+                                "--color=never"
+                                (when (>= depth-val 0) (format "--max-depth=%d" depth-val))
+                                "."
+                                rel-path)))
+            (my/exec-async
+             "gptel-fd"
+             command
+             (lambda (_code out)
+               (funcall callback (if (string-empty-p out) "No files found" out)))))))))
 
-  (defun my/read-url-tool (url)
-    "Fetch content from a URL."
-    (with-current-buffer (url-retrieve-synchronously url)
-      (goto-char (point-min))
-      (re-search-forward "^$" nil 'move)
-      (forward-char)
-      (let ((content (buffer-substring-no-properties (point) (point-max))))
-        ;; Simple cleanup to reduce token usage
-        (with-temp-buffer
-          (insert content)
-          (shr-render-region (point-min) (point-max))
-          (buffer-string)))))
+  (defun my/rg-tool (callback search-pattern &optional glob path context max-results)
+    "Search for PATTERN in files in PATH using ripgrep."
+    (let* ((ignore-file (expand-file-name "~/.config/git/ignore"))
+           ;; Handle gptel's :json-false or nil for optional integer args
+           (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
+           (command (list "rg"
+                          "--color=never"
+                          "--max-columns=500"
+                          "--max-columns-preview"
+                          "--with-filename"
+                          "--no-heading"
+                          "-n"
+                          (when (file-exists-p ignore-file) (format "--ignore-file=%s" ignore-file))
+                          (when (and (stringp glob) (not (string-empty-p glob))) (format "--glob=%s" glob))
+                          (when (and context (> context 0)) (format "--context=%d" context))
+                          (when (> max-results 0) (format "--max-count=%d" max-results))
+                          "--"
+                          search-pattern
+                          (when (and (stringp path) (not (string-empty-p path))) path))))
+      (my/exec-async
+       "gptel-rg"
+       command
+       (lambda (_code out)
+         (funcall callback (if (string-empty-p out) "No matches found" out))))))
 
-  (defun my/run-command-tool (command)
-    "Run a shell command in the project root and return output."
-    (let ((default-directory (doom-project-root)))
-      (shell-command-to-string command)))
+  (defun my/fzf-tool (callback pattern &optional exact path depth max-results)
+    "Fuzzy search for file names matching PATTERN in PATH using fzf."
+    (let* ((root (doom-project-root))
+           ;; 1. Resolve the target path relative to the project root
+           (rel-path (if path
+                         (file-relative-name (expand-file-name path root) root)
+                       "."))
+           ;; 2. Use correct flag for rg depth (--max-depth instead of -d)
+           (depth-arg (if (and depth (integerp depth)) (format "--max-depth %d" depth) ""))
+           (max-results (or max-results 50))
+           (ignore-file (expand-file-name "~/.config/git/ignore"))
+           (ignore-arg (if (file-exists-p ignore-file)
+                           (format "--ignore-file %s" (shell-quote-argument ignore-file))
+                         ""))
+           (max-lines-arg (if (>= max-results 0)
+                              (format " | head -n %s"
+                                      (shell-quote-argument (number-to-string max-results)))
+                            ""))
+           ;; 3. Pass the relative path directly to rg, removing the need for `cd`
+           (command (format "rg %s --files %s %s | fzf --ansi --filter=%s %s %s"
+                            ignore-arg
+                            depth-arg
+                            (shell-quote-argument rel-path)
+                            (shell-quote-argument pattern)
+                            (if exact "--exact" "")
+                            max-lines-arg)))
+      (my/exec-async
+       "gptel-fzf"
+       (list shell-file-name shell-command-switch command)
+       (lambda (_code out)
+         (funcall callback (if (string-empty-p out) "No matches found" out))))))
+
+  (defun my/apply-patch-tool (callback patch)
+    (let ((patch-content (if (string-suffix-p "\n" patch) patch (concat patch "\n")))
+          (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--" "-")))
+      (my/exec-async
+       "gptel-git-apply"
+       command
+       (lambda (code out)
+         (funcall callback (if (zerop code)
+                               out
+                             (format "Error applying patch (exit code %d):\n%s" code out))))
+       patch-content)))
+
+  (defun my/run-command-tool (callback command)
+    (my/exec-async
+     "gptel-run-cmd"
+     (list shell-file-name shell-command-switch command)
+     (lambda (code out)
+       (funcall callback (if (zerop code)
+                             out
+                           (format "Command failed (exit code %d):\n%s" code out))))))
+
+  (defun my/read-url-tool (callback url)
+    "Fetch content from a URL asynchronously.
+CALLBACK is called with the result string."
+    (condition-case err
+        (url-retrieve
+         url
+         (lambda (status)
+           (condition-case parse-err
+               (let ((http-err (plist-get status :error)))
+                 (if http-err
+                     (funcall callback (format "Error fetching URL: %s" http-err))
+                   (set-buffer-multibyte t)
+                   (goto-char (point-min))
+                   ;; Find end of HTTP headers
+                   (if (not (re-search-forward "^$" nil t))
+                       (funcall callback "Error: Invalid HTTP response (no headers separator found).")
+                     (forward-line 1)
+                     (let ((content (buffer-substring-no-properties (point) (point-max))))
+                       (with-temp-buffer
+                         (insert content)
+                         (ignore-errors (shr-render-region (point-min) (point-max)))
+                         (funcall callback (string-trim (buffer-string))))))))
+             (error (funcall callback (format "Error processing response: %s" parse-err))))
+           (when (buffer-live-p (current-buffer))
+             (kill-buffer (current-buffer))))
+         nil t)
+      (error (funcall callback (format "Error initiating request: %s" (error-message-string err))))))
+
 
   (dolist (custom-tool-plist
            '((:name "fd"
               :function my/list-files-tool
               :category "filesystem"
               :description "List directories in a path using `fd'."
+              :async t
               :args ((:name "path" :type string :description "Directory path relative to project root.")
-                     (:name "recursive" :type boolean :description "List subdirectories recursively, if argument is present. Default is false" :optional t)))
+                     (:name "depth" :type integer :description "Depth limit, e.g. 1: immediate children, -1: recursive. Default: 1." :optional t)))
              (:name "rg"
               :function my/rg-tool
               :category "filesystem"
-              :description "Search file content using regex with ripgrep"
+              :description "Search file content using regex with `ripgrep'"
+              :async t
               :args ((:name "search-pattern" :type string :description "Regex pattern to search in file contents")
                      (:name "glob" :type string :description "Glob pattern for files to include in search (e.g., \"*.py\")" :optional t)
                      (:name "path" :type string :description "Path to a file or a directory to search in. Default is a project root" :optional t)
@@ -327,7 +379,8 @@ The patch is applied relative to the project root."
              (:name "fzf"
               :function my/fzf-tool
               :category "filesystem"
-              :description "Fuzzy search for file names using fzf"
+              :description "Fuzzy search for file names using `fzf'"
+              :async t
               :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names. Empty string to match all files.")
                      (:name "exact" :type boolean :description "Enable exact-match." :optional t)
                      (:name "path" :type string :description "Directory to search in. Default is a project root." :optional t)
@@ -343,20 +396,23 @@ The patch is applied relative to the project root."
              (:name "apply_patch"
               :function my/apply-patch-tool
               :category "filesystem"
-              :confirm t
               :description "Apply a git-formatted PATCH string using `git apply'. The patch is applied relative to the project root."
+              :async t
+              :confirm t
               :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))
-             (:name "run_cmd"
+             (:name "shell"
               :function my/run-command-tool
               :category "system"
+              :description "Run a shell command. Use ONLY for non-destructive commands. NEVER use for file manipulation."
+              :async t
               :confirm t
-              :description "Run a shell command to verify build/tests."
               :args ((:name "command" :type string :description "A shell command to run. Only safe commands are allowed.")))
              (:name "read_url"
               :function my/read-url-tool
-              :confirm t
               :category "network"
               :description "Fetch and read the visible text content of a URL."
+              :async t
+              :confirm t
               :args ((:name "url" :type string :description "The URL to fetch.")))))
     (apply #'gptel-make-tool custom-tool-plist))
 
@@ -434,7 +490,7 @@ The patch is applied relative to the project root."
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
     :system (alist-get 'programming gptel-directives)
-    :tools '("fd" "fzf" "rg" "cat" "apply_patch" "run_cmd"))
+    :tools '("fd" "fzf" "rg" "cat" "shell" "apply_patch"))
   (gptel-make-preset 'gemini-grounded
     :description "Gemini with Google Search grounding"
     :parents 'default
