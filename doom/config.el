@@ -171,256 +171,17 @@
                            ("anthropic-beta" . "context-management-2025-06-27")))))
 
   ;; DEFINE: Tools
-  (defun my/exec-async (name command callback &optional input)
-    "Generic helper to run a process asynchronously.
-NAME is the process name, COMMAND is the list of args,
-CALLBACK is called with (exit-code output), and optional INPUT is sent to stdin."
-    (let* ((default-directory (doom-project-root))
-           (output-buffer (generate-new-buffer (format "*%s*" name)))
-           (proc (make-process
-                  :name name
-                  :buffer output-buffer
-                  :command (remq nil command)
-                  :connection-type (if input 'pipe 'pty)
-                  :sentinel
-                  (lambda (proc _event)
-                    (when (memq (process-status proc) '(exit signal))
-                      (let ((exit-code (process-exit-status proc))
-                            (output (with-current-buffer output-buffer
-                                      (string-trim (buffer-string)))))
-                        (kill-buffer output-buffer)
-                        (funcall callback exit-code output)))))))
-      (when input
-        (process-send-string proc input)
-        (process-send-eof proc))))
-
-  (defun my/cat-file-tool (path &optional offset limit)
-    "Read the contents of file at PATH and return it as a string."
-    (let ((default-directory (doom-project-root))
-          (offset (or offset 1))
-          (limit (or limit 2000))
-          ;; SAFETY: Prevent freezing on massive files (e.g., >10MB)
-          (max-size (* 10 1024 1024)))
-      (cond
-       ((not (file-readable-p path))
-        (format "Error: File '%s' is not readable or does not exist." path))
-       ((> (file-attribute-size (file-attributes path)) max-size)
-        (format "Error: File '%s' is too large (%.2f MB). Limit is 10MB."
-                path (/ (file-attribute-size (file-attributes path)) 1048576.0)))
-       (t
-        (with-temp-buffer
-          (insert-file-contents path)
-          (let* ((total-lines (count-lines (point-min) (point-max)))
-                 (end-line (min (+ offset limit -1) total-lines)))
-            (goto-char (point-min))
-            (when (> offset 1)
-              (forward-line (1- offset)))
-            (let ((start (point)))
-              (forward-line limit)
-              (let ((content (buffer-substring-no-properties start (point))))
-                (if (or (> offset 1) (< end-line total-lines))
-                    (format "%s\n[... File has %d lines. Showing lines %d-%d ...]"
-                            content total-lines offset end-line)
-                  content)))))))))
-
-  (defun my/list-files-tool (callback path &optional depth)
-    "List files in PATH using fd. Respects .gitignore.
-DEPTH is the directory traversal limit (integer).
-- Default (nil/1): List immediate children only.
-- -1: List recursively (no limit)."
-    (let* ((default-directory (doom-project-root))
-           (full-path (expand-file-name (or path ".") default-directory))
-           (rel-path (file-relative-name full-path default-directory)))
-      ;; Security: Ensure resolved path is within project root
-      (if (not (or (file-equal-p full-path default-directory)
-                   (string-prefix-p (expand-file-name default-directory)
-                                    (expand-file-name full-path))))
-          (funcall callback (format "Error: Access denied. '%s' is outside project root." path))
-        (if (not (file-exists-p full-path))
-            (funcall callback (format "Error: Path '%s' does not exist." rel-path))
-          ;; Handle :json-false (from LLM) or nil as default (1)
-          (let* ((depth-val (if (and (integerp depth) (not (eq depth :json-false))) depth 1))
-                 (command (list "fd"
-                                "--color=never"
-                                (when (>= depth-val 0) (format "--max-depth=%d" depth-val))
-                                "."
-                                rel-path)))
-            (my/exec-async
-             "gptel-fd"
-             command
-             (lambda (_code out)
-               (funcall callback (if (string-empty-p out) "No files found" out)))))))))
-
-  (defun my/rg-tool (callback search-pattern &optional glob path context max-results)
-    "Search for PATTERN in files in PATH using ripgrep."
-    (let* ((ignore-file (expand-file-name "~/.config/git/ignore"))
-           ;; Handle gptel's :json-false or nil for optional integer args
-           (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
-           (command (list "rg"
-                          "--color=never"
-                          "--max-columns=500"
-                          "--max-columns-preview"
-                          "--with-filename"
-                          "--no-heading"
-                          "-n"
-                          (when (file-exists-p ignore-file) (format "--ignore-file=%s" ignore-file))
-                          (when (and (stringp glob) (not (string-empty-p glob))) (format "--glob=%s" glob))
-                          (when (and context (> context 0)) (format "--context=%d" context))
-                          (when (> max-results 0) (format "--max-count=%d" max-results))
-                          "--"
-                          search-pattern
-                          (when (and (stringp path) (not (string-empty-p path))) path))))
-      (my/exec-async
-       "gptel-rg"
-       command
-       (lambda (_code out)
-         (funcall callback (if (string-empty-p out) "No matches found" out))))))
-
-  (defun my/fzf-tool (callback pattern &optional exact path depth max-results)
-    "Fuzzy search for file names matching PATTERN in PATH using fzf."
-    (let* ((root (doom-project-root))
-           ;; 1. Resolve the target path relative to the project root
-           (rel-path (if path
-                         (file-relative-name (expand-file-name path root) root)
-                       "."))
-           ;; 2. Use correct flag for rg depth (--max-depth instead of -d)
-           (depth-arg (if (and depth (integerp depth)) (format "--max-depth %d" depth) ""))
-           (max-results (or max-results 50))
-           (ignore-file (expand-file-name "~/.config/git/ignore"))
-           (ignore-arg (if (file-exists-p ignore-file)
-                           (format "--ignore-file %s" (shell-quote-argument ignore-file))
-                         ""))
-           (max-lines-arg (if (>= max-results 0)
-                              (format " | head -n %s"
-                                      (shell-quote-argument (number-to-string max-results)))
-                            ""))
-           ;; 3. Pass the relative path directly to rg, removing the need for `cd`
-           (command (format "rg %s --files %s %s | fzf --ansi --filter=%s %s %s"
-                            ignore-arg
-                            depth-arg
-                            (shell-quote-argument rel-path)
-                            (shell-quote-argument pattern)
-                            (if exact "--exact" "")
-                            max-lines-arg)))
-      (my/exec-async
-       "gptel-fzf"
-       (list shell-file-name shell-command-switch command)
-       (lambda (_code out)
-         (funcall callback (if (string-empty-p out) "No matches found" out))))))
-
-  (defun my/apply-patch-tool (callback patch)
-    (let ((patch-content (if (string-suffix-p "\n" patch) patch (concat patch "\n")))
-          (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--" "-")))
-      (my/exec-async
-       "gptel-git-apply"
-       command
-       (lambda (code out)
-         (funcall callback (if (zerop code)
-                               out
-                             (format "Error applying patch (exit code %d):\n%s" code out))))
-       patch-content)))
-
-  (defun my/run-command-tool (callback command)
-    (my/exec-async
-     "gptel-run-cmd"
-     (list shell-file-name shell-command-switch command)
-     (lambda (code out)
-       (funcall callback (if (zerop code)
-                             out
-                           (format "Command failed (exit code %d):\n%s" code out))))))
-
-  (defun my/read-url-tool (callback url)
-    "Fetch content from a URL asynchronously.
-CALLBACK is called with the result string."
-    (condition-case err
-        (url-retrieve
-         url
-         (lambda (status)
-           (condition-case parse-err
-               (let ((http-err (plist-get status :error)))
-                 (if http-err
-                     (funcall callback (format "Error fetching URL: %s" http-err))
-                   (set-buffer-multibyte t)
-                   (goto-char (point-min))
-                   ;; Find end of HTTP headers
-                   (if (not (re-search-forward "^$" nil t))
-                       (funcall callback "Error: Invalid HTTP response (no headers separator found).")
-                     (forward-line 1)
-                     (let ((content (buffer-substring-no-properties (point) (point-max))))
-                       (with-temp-buffer
-                         (insert content)
-                         (ignore-errors (shr-render-region (point-min) (point-max)))
-                         (funcall callback (string-trim (buffer-string))))))))
-             (error (funcall callback (format "Error processing response: %s" parse-err))))
-           (when (buffer-live-p (current-buffer))
-             (kill-buffer (current-buffer))))
-         nil t)
-      (error (funcall callback (format "Error initiating request: %s" (error-message-string err))))))
-
-
-  (dolist (custom-tool-plist
-           '((:name "fd"
-              :function my/list-files-tool
-              :category "filesystem"
-              :description "List directories in a path using `fd'."
-              :async t
-              :args ((:name "path" :type string :description "Directory path relative to project root.")
-                     (:name "depth" :type integer :description "Depth limit, e.g. 1: immediate children, -1: recursive. Default: 1." :optional t)))
-             (:name "rg"
-              :function my/rg-tool
-              :category "filesystem"
-              :description "Search file content using regex with `ripgrep'"
-              :async t
-              :args ((:name "search-pattern" :type string :description "Regex pattern to search in file contents")
-                     (:name "glob" :type string :description "Glob pattern for files to include in search (e.g., \"*.py\")" :optional t)
-                     (:name "path" :type string :description "Path to a file or a directory to search in. Default is a project root" :optional t)
-                     (:name "context" :type integer :description "Show NUM lines before and after each match. Default is to show only a matching line." :optional t)
-                     (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 50. Set to -1 for no limit." :optional t)))
-             (:name "fzf"
-              :function my/fzf-tool
-              :category "filesystem"
-              :description "Fuzzy search for file names using `fzf'"
-              :async t
-              :args ((:name "pattern" :type string :description "Fuzzy search pattern for file names. Empty string to match all files.")
-                     (:name "exact" :type boolean :description "Enable exact-match." :optional t)
-                     (:name "path" :type string :description "Directory to search in. Default is a project root." :optional t)
-                     (:name "depth" :type integer :description "Limit the traversal depth, if specified. Do not limit by default." :optional t)
-                     (:name "max-results" :type integer :description "Output only the first `max-results'. Default: 50. Set to -1 for no limit." :optional t)))
-             (:name "cat"
-              :function my/cat-file-tool
-              :category "filesystem"
-              :description "Read the content of a file and return it as a string."
-              :args ((:name "path" :type string :description "Path to the file to read.")
-                     (:name "offset" :type integer :description "Line number to start reading from (1-based). Default: 1." :optional t)
-                     (:name "limit" :type integer :description "Maximum number of lines to return. Default: 2000." :optional t)))
-             (:name "apply_patch"
-              :function my/apply-patch-tool
-              :category "filesystem"
-              :description "Apply a git-formatted PATCH string using `git apply'. The patch is applied relative to the project root."
-              :async t
-              :confirm t
-              :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))
-             (:name "shell"
-              :function my/run-command-tool
-              :category "system"
-              :description "Run a shell command. Use ONLY for non-destructive commands. NEVER use for file manipulation."
-              :async t
-              :confirm t
-              :args ((:name "command" :type string :description "A shell command to run. Only safe commands are allowed.")))
-             (:name "read_url"
-              :function my/read-url-tool
-              :category "network"
-              :description "Fetch and read the visible text content of a URL."
-              :async t
-              :confirm t
-              :args ((:name "url" :type string :description "The URL to fetch.")))))
-    (apply #'gptel-make-tool custom-tool-plist))
+  (use-package! custom-gptel-tools
+    :config
+    (setq my/custom-gptel-tools-whitelist-directories '("~/Projects"))
+    (mapc (apply-partially #'apply #'gptel-make-tool) my/gptel-custom-tools))
 
   (use-package! mcp
     :config (require 'mcp-hub)
     :custom (mcp-hub-servers
              `(("git" . (:command "uvx" :args ("mcp-server-git")))
                ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp")))
+               ("agentdb" . (:command "bunx" :args ("--bun" "agentdb" "mcp" "start")))
                ("playwright" . (:command "bunx" :args ("--bun" "@playwright/mcp" "--browser" "webkit")))
                ("atlassian" . (:command "podman"
                                :args ("run" "-i" "--rm"
@@ -436,14 +197,22 @@ CALLBACK is called with the result string."
       ("current_directory" . ,default-directory)))
 
   (defun gptel-prompts-project-agents-instructions (_file)
-    "Read agent's instructiosn from the project root and return it as list."
-    `(("project_agents_instructions" . ,(cl-loop
-                                         for item in '("AGENTS.md" "GEMINI.md" "CLAUDE.md")
-                                         for path = (expand-file-name item (doom-project-root))
-                                         when (file-readable-p path)
-                                         collect (with-temp-buffer
-                                                   (insert-file-contents path)
-                                                   (buffer-string))))))
+    "Read agent's instructions from the current directory and all parents up to root."
+    (let ((files-to-check '("AGENTS.md" "GEMINI.md" "CLAUDE.md"))
+          (instructions '())
+          (dir (expand-file-name default-directory))
+          (last-dir nil))
+      (while (not (equal dir last-dir))
+        (dolist (file files-to-check)
+          (let ((path (expand-file-name file dir)))
+            (when (and (file-readable-p path) (not (file-directory-p path)))
+              (push (with-temp-buffer
+                      (insert-file-contents path)
+                      (buffer-string))
+                    instructions))))
+        (setq last-dir dir
+              dir (file-name-directory (directory-file-name dir))))
+      `(("project_agents_instructions" . ,(reverse instructions)))))
   (defun gptel-prompts-filter-nindent (content n)
     "Indent each line of CONTENT with N spaces."
     (replace-regexp-in-string "^" (make-string n ?\s) content))
@@ -490,7 +259,7 @@ CALLBACK is called with the result string."
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
     :system (alist-get 'programming gptel-directives)
-    :tools '("fd" "fzf" "rg" "cat" "shell" "apply_patch"))
+    :tools '("fd" "fzf" "rg" "cat" "bash" "apply_patch"))
   (gptel-make-preset 'gemini-grounded
     :description "Gemini with Google Search grounding"
     :parents 'default
@@ -573,32 +342,37 @@ CALLBACK is called with the result string."
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 
+(map! (:leader
+       (:prefix ("o" . "open")
+                (:prefix ("l" . "llm")
+                 :desc "Agent Shell"
+                 "P" #'agent-shell))
+       (:prefix ("c" . "code")
+        :desc "Search LSP Symbols in buffer"
+        "F" #'consult-lsp-file-symbols)))
+
+(map! :after transient
+      :map transient-map
+      [escape] #'transient-quit-one)
+
+(map! :after gptel
+      (:mode gptel-mode
+       :map gptel-mode-map
+       :n "RET"     #'gptel-send
+       :n "C-c C-k" #'gptel-abort)
+      (:mode gptel-context
+       :map gptel-context-buffer-mode-map
+       :n "Z Z" #'gptel-context-confirm
+       :n "q"   #'gptel-context-quit
+       :n "RET" #'gptel-context-visit
+       :n "d"   #'gptel-context-flag-deletion))
+
 (map! :n "C-i"      #'evil-jump-forward
       :n "C-o"      #'evil-jump-backward
       :n "SPC f t"  #'treemacs
       :n "g r"      #'+lookup/references
       :n "g i"      #'+lookup/implementations
       :n "g D"      #'+lookup/type-definition)
-
-(map! :leader
-      :prefix ("c" . "code")
-      :desc "Search LSP Symbols in buffer" "F" #'consult-lsp-file-symbols)
-
-(map! :after transient
-      :map transient-map
-      [escape] #'transient-quit-one)
-
-(after! gptel
-  (map! :mode gptel-mode
-        :n "RET"   #'gptel-send
-        :n "C-c C-k" #'gptel-abort)
-  (map! :mode gptel-context-buffer-mode
-        :n "Z Z" #'gptel-context-confirm
-        :n "Z Q" #'gptel-context-quit
-        :n "RET"     #'gptel-context-visit
-        :n "n"       #'gptel-context-next
-        :n "p"       #'gptel-context-previous
-        :n "d"       #'gptel-context-flag-deletion))
 
 (custom-set-faces!
   '(gptel-context-highlight-face :background "#2C333F")
