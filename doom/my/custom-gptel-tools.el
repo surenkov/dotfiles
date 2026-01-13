@@ -8,12 +8,37 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'doom)
 
 (declare-function doom-project-root "doom-lib")
 
 (defvar my/custom-gptel-tools-whitelist-directories nil
   "List of additional directories that tools are allowed to access.
 Paths can be absolute or relative to the project root.")
+
+(defvar my/custom-gptel-sandbox-profile-path
+  (expand-file-name "my/sandbox-rules.sb" doom-user-dir)
+  "Path to the macOS sandbox profile (.sb) for gptel tools.")
+
+(defun my--wrap-sandbox-command (command-args)
+  "Wrap COMMAND-ARGS in `sandbox-exec` if the profile exists and we are local.
+Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
+  (let ((sandbox-exec "/usr/bin/sandbox-exec"))
+    (if (and my/custom-gptel-sandbox-profile-path
+             (file-exists-p my/custom-gptel-sandbox-profile-path))
+        (let* ((root (expand-file-name (doom-project-root)))
+               (home (expand-file-name "~"))
+               (whitelist (mapcar (lambda (d) (expand-file-name d root))
+                                  my/custom-gptel-tools-whitelist-directories))
+               (whitelist-str (mapconcat #'identity whitelist ":")))
+          (append (list sandbox-exec
+                        "-f" my/custom-gptel-sandbox-profile-path
+                        "-D" (format "TARGET_DIR=%s" root)
+                        "-D" (format "HOME_DIR=%s" home)
+                        "-D" (format "TMP_DIR=%s" (expand-file-name temporary-file-directory))
+                        "-D" (format "WHITELIST_DIRS=%s" whitelist-str))
+                  command-args))
+      command-args)))
 
 (defun my--path-allowed-p (path)
   "Return non-nil if PATH is within the project root or whitelisted directories."
@@ -103,7 +128,7 @@ DEPTH is the directory traversal limit (integer).
 - -1: List recursively (no limit).
 INCLUDE-HIDDEN is a boolean to include hidden files and directories."
   (let* ((root (doom-project-root))
-         (pattern (if (not pattern) "." pattern))
+         (pattern (or pattern "."))
          (full-path (expand-file-name (or path "./") root))
          (rel-path (file-relative-name full-path root)))
     (if (not (my--path-allowed-p full-path))
@@ -203,7 +228,8 @@ MAX-RESULTS is the maximum number of matches to return."
   "Run COMMAND in a shell and call CALLBACK with the result."
   (my--async-exec
    "gptel-shell-cmd"
-   (list shell-file-name shell-command-switch command)
+   (my--wrap-sandbox-command
+    (list shell-file-name shell-command-switch command))
    (lambda (code out)
      (funcall callback (if (zerop code)
                            out
