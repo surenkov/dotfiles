@@ -69,6 +69,7 @@ font-feature = -dlig
 
 macos-option-as-alt = true
 cursor-style = block
+auto-update = off
 
 clipboard-read = allow
 clipboard-write = allow
