@@ -10,19 +10,24 @@
 
 (allow file-read*
        (literal "/")
+       (literal "/Users")
+       (literal (param "HOME_DIR"))
+
        (subpath "/usr")
        (subpath "/bin")
        (subpath "/opt")
        (subpath "/var")
+       (subpath "/etc")
        (subpath "/private/var")
        (subpath "/System")
-       ;; Git configuration
-       (subpath (string-append (param "HOME_DIR") "/.config/git"))
-       (literal (string-append (param "HOME_DIR") "/.gitconfig")))
 
-;; Whitelisted directories
-(for-each (lambda (path) (allow file-read* (subpath path)))
-                 (split-string (param "WHITELIST_DIRS") ":"))
+       ;; Git configuration
+       (literal (string-append (param "HOME_DIR") "/.gitconfig"))
+       (literal (string-append (param "HOME_DIR") "/.ripgreprc"))
+       (subpath (string-append (param "HOME_DIR") "/.config"))
+
+       (subpath (string-append (param "HOME_DIR") "/.local"))
+       (subpath (string-append (param "HOME_DIR") "/.pyenv")))
 
 ;; Allow process execution and forking (children inherit policy)
 (allow process-exec)
@@ -47,7 +52,9 @@
     (subpath "/var/folders")  ; macOS temp directory root
     (subpath "/private/var/folders")  ; Real path (var is symlink to private/var)
 
+    ;; Cache directory
     (subpath (string-append (param "HOME_DIR") "/.cache"))
+    (subpath (string-append (param "HOME_DIR") "/Library/Caches"))
 
     ;; Standard I/O devices
     (literal "/dev/stdout")
@@ -60,3 +67,7 @@
     (literal "/dev/random")
     (regex #"^/dev/tty*")
     (regex #"^/dev/pty*"))
+
+;; Whitelisted directories
+(for-each (lambda (path) (allow file-read* (subpath path)))
+                 (split-string (param "WHITELIST_DIRS") ":"))

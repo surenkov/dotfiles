@@ -128,28 +128,26 @@ DEPTH is the directory traversal limit (integer).
 - -1: List recursively (no limit).
 INCLUDE-HIDDEN is a boolean to include hidden files and directories."
   (let* ((root (doom-project-root))
-         (pattern (or pattern "."))
          (full-path (expand-file-name (or path "./") root))
          (rel-path (file-relative-name full-path root)))
-    (if (not (my--path-allowed-p full-path))
-        (funcall callback (format "Error: Access denied. '%s' is outside allowed directories." (or path ".")))
-      (if (not (file-exists-p full-path))
-          (funcall callback (format "Error: Path '%s' does not exist." rel-path))
-        ;; Handle :json-false (from LLM) or nil as default (1)
-        (let* ((depth-val (if (and (integerp depth)
-                                   (not (eq depth :json-false)))
-                              depth 1))
-               (command (list "fd"
-                              "--color=never"
-                              (when (>= depth-val 0) (format "--max-depth=%d" depth-val))
-                              (when (and include-hidden (not (eq include-hidden :json-false))) "--hidden")
-                              pattern
-                              rel-path)))
-          (my--async-exec
-           "gptel-fd"
-           command
-           (lambda (_code out)
-             (funcall callback (if (string-empty-p out) "No files found" out)))))))))
+    (if (not (file-exists-p full-path))
+        (funcall callback (format "Error: Path '%s' does not exist." rel-path))
+      (let* ((depth-val (cond
+                         ((and (integerp depth) (not (eq depth :json-false))) depth)
+                         ((and (not (null pattern)) (not (string-empty-p pattern))) -1)
+                         ((and (or (null path) (eq path :json-false))) 1)
+                         (t 1)))
+             (command (list "fd"
+                            "--color=never"
+                            (when (>= depth-val 0) (format "--max-depth=%d" depth-val))
+                            (when (and include-hidden (not (eq include-hidden :json-false))) "--hidden")
+                            (or pattern ".")
+                            rel-path)))
+        (my--async-exec
+         "gptel-fd"
+         (my--wrap-sandbox-command command)
+         (lambda (_code out)
+           (funcall callback (if (string-empty-p out) "No files found" out))))))))
 
 (defun my/rg-tool (callback search-pattern &optional glob path context max-results)
   "Search for SEARCH-PATTERN in files in PATH using ripgrep.
@@ -157,30 +155,28 @@ CALLBACK is called with the result string.
 GLOB is an optional glob pattern to filter files.
 CONTEXT is the number of lines of context to show.
 MAX-RESULTS is the maximum number of matches to return."
-  (if (and path (not (my--path-allowed-p path)))
-      (funcall callback (format "Error: Access denied. '%s' is outside allowed directories." path))
-    (let* ((ignore-file (expand-file-name "~/.config/git/ignore"))
-           (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
-           (command (list
-                     "rg"
-                     "--color=never"
-                     "--max-columns=500"
-                     "--max-columns-preview"
-                     "--with-filename"
-                     "--no-heading"
-                     "-n"
-                     (when (file-exists-p ignore-file) (format "--ignore-file=%s" ignore-file))
-                     (when (and (stringp glob) (not (string-empty-p glob))) (format "--glob=%s" glob))
-                     (when (and (integerp context) (> context 0)) (format "--context=%d" context))
-                     (when (> max-results 0) (format "--max-count=%d" max-results))
-                     "--"
-                     search-pattern
-                     (or path "."))))
-      (my--async-exec
-       "gptel-rg"
-       command
-       (lambda (_code out)
-         (funcall callback (if (string-empty-p out) "No matches found" out)))))))
+  (let* ((ignore-file (expand-file-name "~/.config/git/ignore"))
+         (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
+         (command (list
+                   "rg"
+                   "--color=never"
+                   "--max-columns=500"
+                   "--max-columns-preview"
+                   "--with-filename"
+                   "--no-heading"
+                   "-n"
+                   (when (file-exists-p ignore-file) (format "--ignore-file=%s" ignore-file))
+                   (when (and (stringp glob) (not (string-empty-p glob))) (format "--glob=%s" glob))
+                   (when (and (integerp context) (> context 0)) (format "--context=%d" context))
+                   (when (> max-results 0) (format "--max-count=%d" max-results))
+                   "--"
+                   search-pattern
+                   (or path "."))))
+    (my--async-exec
+     "gptel-rg"
+     (my--wrap-sandbox-command command)
+     (lambda (_code out)
+       (funcall callback (if (string-empty-p out) "No matches found" out))))))
 
 (defun my/fzf-tool (callback pattern &optional exact path depth max-results)
   "Fuzzy search for file names matching PATTERN in PATH using fzf.
@@ -192,24 +188,23 @@ MAX-RESULTS is the maximum number of matches to return."
          (path (if (eq path :json-false) nil path))
          (full-path (expand-file-name (or path ".")))
          (rel-path (file-relative-name full-path)))
-    (if (not (my--path-allowed-p full-path))
-        (funcall callback (format "Error: Access denied. '%s' is outside allowed directories." rel-path))
-      (let* ((depth-arg (if (and (integerp depth) (not (eq depth :json-false))) (format "--max-depth %d" depth) ""))
-             (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
-             (ignore-file (expand-file-name "~/.config/git/ignore"))
-             (ignore-arg (if (file-exists-p ignore-file) (format "--ignore-file %s" (shell-quote-argument ignore-file)) ""))
-             (max-lines-arg (if (>= max-results 0) (format " | head -n %s" (shell-quote-argument (number-to-string max-results))) ""))
-             (command (format "rg %s --files %s %s | fzf --ansi --filter=%s %s %s"
-                              ignore-arg
-                              depth-arg
-                              (shell-quote-argument rel-path)
-                              (shell-quote-argument pattern)
-                              (if exact "--exact" "")
-                              max-lines-arg)))
-        (my--async-exec
-         "gptel-fzf"
-         (list shell-file-name shell-command-switch command)
-         (lambda (_code out) (funcall callback (if (string-empty-p out) "No matches found" out))))))))
+    (let* ((depth-arg (if (and (integerp depth) (not (eq depth :json-false))) (format "--max-depth %d" depth) ""))
+           (ignore-file (expand-file-name "~/.config/git/ignore"))
+           (ignore-arg (if (file-exists-p ignore-file) (format "--ignore-file %s" (shell-quote-argument ignore-file)) ""))
+           (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
+           (max-lines-arg (if (>= max-results 0) (format " | head -n %s" (shell-quote-argument (number-to-string max-results))) ""))
+           (command (format "rg %s --files %s %s | fzf --ansi --filter=%s %s %s"
+                            ignore-arg
+                            depth-arg
+                            (shell-quote-argument rel-path)
+                            (shell-quote-argument pattern)
+                            (if exact "--exact" "")
+                            max-lines-arg)))
+      (my--async-exec
+       "gptel-fzf"
+       (my--wrap-sandbox-command
+        (list shell-file-name shell-command-switch command))
+       (lambda (_code out) (funcall callback (if (string-empty-p out) "No matches found" out)))))))
 
 (defun my/apply-patch-tool (callback patch)
   "Apply PATCH using git apply and call CALLBACK with the result."
@@ -217,14 +212,14 @@ MAX-RESULTS is the maximum number of matches to return."
         (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--" "-")))
     (my--async-exec
      "gptel-git-apply"
-     command
+     (my--wrap-sandbox-command command)
      (lambda (code out)
        (funcall callback (if (zerop code)
                              out
                            (format "Error applying patch (exit code %d):\n%s" code out))))
      patch-content)))
 
-(defun my/bash-tool (callback command)
+(defun my/shell-tool (callback command)
   "Run COMMAND in a shell and call CALLBACK with the result."
   (my--async-exec
    "gptel-shell-cmd"
@@ -267,12 +262,12 @@ CALLBACK is called with the result string."
   '((:name "fd"
      :function my/fd-tool
      :category "filesystem"
-     :description "List files and directories in a path using `fd'. Like `ls', but more powerful."
+     :description "List files and directories using `fd'. Smart defaults: lists immediate children, but switches to recursive search if a `pattern' is provided."
      :async t
-     :args ((:name "path" :type string :description "Directory path relative to project root. Default is '.' (a project root)" :optional t)
-            (:name "pattern" :type string :description "Search pattern (regular expression). Consider using it with recursive `depth', if non-default. Default is '.' (match anything)." :optional t)
-            (:name "depth" :type integer :description "Depth limit, e.g. 1: immediate children, -1: recursive. Default: 1." :optional t)
-            (:name "include-hidden" :type boolean :description "Include hidden files and directories. Default: false" :optional t)))
+     :args ((:name "path" :type string :description "Directory path relative to project root. Default: project root." :optional t)
+            (:name "pattern" :type string :description "Regex pattern to filter files. If provided, search defaults to recursive (-1) unless `depth' is explicitly set." :optional t)
+            (:name "depth" :type integer :description "Depth limit, e.g. 1: immediate children, -1: recursive. Default: 1 (or -1 if `pattern` is present)." :optional t)
+            (:name "include-hidden" :type boolean :description "Include hidden files/directories. Default: false." :optional t)))
     (:name "rg"
      :function my/rg-tool
      :category "filesystem"
@@ -303,14 +298,21 @@ CALLBACK is called with the result string."
     (:name "apply_patch"
      :function my/apply-patch-tool
      :category "filesystem"
-     :description "Apply a git-formatted PATCH string using `git apply'. The patch is applied relative to the project root. Use this tool for file edits."
+     :description "Apply a GNU unified diff format patch to one or more files. This is the primary tool for code modifications.
+- Use relative paths from the project root in --- a/ and +++ b/ headers.
+- Include @@ -start,len +start,len @@ hunk headers.
+- Provide at least 3 lines of context (lines starting with ' ') around changes to ensure the patch applies cleanly.
+- To create a new file, use --- /dev/null as the source.
+- To delete a file, use +++ /dev/null as the destination.
+- Multiple files can be patched in a single call by concatenating their diffs.
+The tool automatically handles minor line count mismatches and whitespace variations."
      :async t
      :confirm t
-     :args ((:name "patch" :type string :description "A git-formatted patch string to apply.")))
+     :args ((:name "patch" :type string :description "The unified diff content to apply.")))
     (:name "bash"
-     :function my/bash-tool
+     :function my/shell-tool
      :category "system"
-     :description "Run a shell command using `bash'. Use ONLY for non-destructive commands. NEVER use for file manipulation."
+     :description "Run a shell command using `bash'. The tool is sandboxed and no destructive commands are allowed."
      :async t
      :confirm t
      :args ((:name "command" :type string :description "A shell command to run. Only safe commands are allowed.")))
