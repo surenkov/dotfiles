@@ -24,8 +24,7 @@ Paths can be absolute or relative to the project root.")
   "Wrap COMMAND-ARGS in `sandbox-exec` if the profile exists and we are local.
 Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
   (let ((sandbox-exec "/usr/bin/sandbox-exec"))
-    (if (and my/custom-gptel-sandbox-profile-path
-             (file-exists-p my/custom-gptel-sandbox-profile-path))
+    (if my/custom-gptel-sandbox-profile-path
         (let* ((root (expand-file-name (doom-project-root)))
                (home (expand-file-name "~"))
                (whitelist (mapcar (lambda (d) (expand-file-name d root))
