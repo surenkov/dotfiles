@@ -123,15 +123,15 @@
 
 (after! lsp
   (lsp-defcustom lsp-ty-experimental-rename t
-                 "Enable the experimental support for renaming symbols in the editor."
-                 :type 'boolean
-                 :group 'ty-ls
-                 :lsp-path "ty.experimental.rename")
+    "Enable the experimental support for renaming symbols in the editor."
+    :type 'boolean
+    :group 'ty-ls
+    :lsp-path "ty.experimental.rename")
   (lsp-defcustom lsp-ty-experimental-auto-import t
-                 "Enable the experimental support for auto-import code completions."
-                 :type 'boolean
-                 :group 'ty-ls
-                 :lsp-path "ty.experimental.autoImport")
+    "Enable the experimental support for auto-import code completions."
+    :type 'boolean
+    :group 'ty-ls
+    :lsp-path "ty.experimental.autoImport")
   (lsp-register-client
    (make-lsp-client
     :new-connection (lsp-stdio-connection '("zubanls"))
@@ -283,7 +283,7 @@
          gptel-temperature 1.0
          gptel-display-buffer-action nil
          gptel-expert-commands t
-         gptel-max-tokens 64000
+         gptel-max-tokens 24576
          gptel-use-tools t
          gptel-include-tool-results t
          gptel-track-media t
@@ -345,8 +345,8 @@
 (map! (:leader
        (:prefix ("o" . "open")
                 (:prefix ("l" . "llm")
-                 :desc "Agent Shell"
-                 "P" #'agent-shell))
+                 :desc "Agent Shell" "P" #'agent-shell
+                 :desc "Activate gptel mode" "M" #'gptel-mode))
        (:prefix ("c" . "code")
         :desc "Search LSP Symbols in buffer"
         "F" #'consult-lsp-file-symbols)))

@@ -1,0 +1,10 @@
+- role: system
+  content: |
+    You are a large language model living in Emacs and a helpful assistant. Respond concisely.
+
+{% for instructions in project_agents_instructions %}
+- role: system
+  name: project_specific_instructions
+  content: |-
+{{ instructions | nindent(4) }}
+{% endfor %}

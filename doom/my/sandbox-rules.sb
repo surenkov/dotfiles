@@ -3,6 +3,14 @@
 (allow default)
 (deny network*)
 
+(allow system-socket)
+(allow network-bind network-inbound
+    (local ip "localhost:*"))
+(allow network-outbound
+    (control-name "com.apple.netsrc")
+    (literal "/private/var/run/mDNSResponder")
+    (remote ip "localhost:*"))
+
 (deny file-read* file-write*
       (subpath "/")
       (subpath (param "HOME_DIR"))
@@ -21,10 +29,24 @@
        (subpath "/private/var")
        (subpath "/System")
 
+       (path "/etc")
+       (path "/etc/hosts")
+       (path "/etc/resolv.conf")
+       (path "/private")
+       (path "/private/etc")
+       (path "/private/etc/hosts")
+       (path "/private/etc/resolv.conf")
+       (path "/private/var")
+       (path "/private/var/run")
+       (path "/private/var/run/resolv.conf")
+       (path "/var")
+       (path "/var/run")
+
        ;; Git configuration
        (literal (string-append (param "HOME_DIR") "/.gitconfig"))
        (literal (string-append (param "HOME_DIR") "/.ripgreprc"))
        (subpath (string-append (param "HOME_DIR") "/.config"))
+       (subpath (string-append (param "HOME_DIR")) "/Library")
 
        (subpath (string-append (param "HOME_DIR") "/.local"))
        (subpath (string-append (param "HOME_DIR") "/.pyenv")))
@@ -70,4 +92,4 @@
 
 ;; Whitelisted directories
 (for-each (lambda (path) (allow file-read* (subpath path)))
-                 (split-string (param "WHITELIST_DIRS") ":"))
+          (split-string (param "WHITELIST_DIRS") ":"))
