@@ -161,14 +161,16 @@
   (gptel-make-anthropic "Claude"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY")
-    :request-params `(:thinking (:type "enabled" :budget_tokens 10000)
+    :request-params `(:thinking (:type "adaptive")
                       :context_management (:edits [(:type "clear_thinking_20251015")
-                                                   (:type "clear_tool_uses_20250919")]))
+                                                   (:type "clear_tool_uses_20250919")
+                                                   (:type "compact_20260112")]))
     :header (lambda () (when-let* ((key (getenv "ANTHROPIC_API_KEY")))
                          `(("x-api-key" . ,key)
                            ("anthropic-version" . "2023-06-01")
                            ("anthropic-beta" . "extended-cache-ttl-2025-04-11")
-                           ("anthropic-beta" . "context-management-2025-06-27")))))
+                           ("anthropic-beta" . "context-management-2025-06-27")
+                           ("anthropic-beta" . "compact-2026-01-12")))))
 
   ;; DEFINE: Tools
   (use-package! custom-gptel-tools
@@ -247,12 +249,10 @@
   ;; DEFINE: Presets
   (gptel-make-preset 'default
     :description "Default preset"
-    :backend "Gemini"
     :system (alist-get 'default gptel-directives)
     :tools nil)
   (gptel-make-preset 'code-analysis
     :description "A preset optimized for read-only coding tasks"
-    :backend "Gemini"
     :system (alist-get 'code-analysis gptel-directives)
     :tools '("fd" "fzf" "rg" "cat"))
   (gptel-make-preset 'programming
