@@ -157,7 +157,8 @@
     :request-params '(:options (:num_ctx 32000))
     :models '("gemma3n:latest"
               "gpt-oss:latest"
-              "qwen3-coder:latest"))
+              "qwen3-coder:latest"
+              "minimax-m2.5:cloud"))
   (gptel-make-anthropic "Claude"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY")
