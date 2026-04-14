@@ -1,12 +1,9 @@
 set fish_greeting
 
 set BREW_HOME /opt/homebrew
-set -gxp PATH $HOME/.local/bin $HOME/.bin $BREW_HOME/bin $BREW_HOME/opt/llvm/bin /usr/local/bin $HOME/.config/emacs/bin $HOME/.cargo/bin
-
 set -gx PYENV_ROOT $HOME/.pyenv
 set -gx NVM_DIR $HOME/.nvm
-
-set -gxp PATH $PYENV_ROOT/bin
+set -gxp PATH $HOME/.local/bin $HOME/.bin $BREW_HOME/bin $BREW_HOME/opt/llvm/bin /usr/local/bin $HOME/.config/emacs/bin $HOME/.cargo/bin $HOME/go/bin $PYENV_ROOT/bin
 
 set -gx LC_ALL en_US.UTF-8
 set -gx LANG en_US.UTF-8

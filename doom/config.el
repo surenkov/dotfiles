@@ -251,15 +251,18 @@
   (gptel-make-preset 'default
     :description "Default preset"
     :system (alist-get 'default gptel-directives)
+    :post (lambda () (setq gptel-confirm-tool-calls 'auto))
     :tools nil)
   (gptel-make-preset 'code-analysis
     :description "A preset optimized for read-only coding tasks"
+    :parents 'default
     :system (alist-get 'code-analysis gptel-directives)
     :tools '("fd" "fzf" "rg" "cat"))
   (gptel-make-preset 'programming
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
     :system (alist-get 'programming gptel-directives)
+    :post (lambda () (setq gptel-confirm-tool-calls nil))
     :tools '("fd" "fzf" "rg" "cat" "bash" "apply_patch"))
   (gptel-make-preset 'gemini-grounded
     :description "Gemini with Google Search grounding"
@@ -280,22 +283,22 @@
     :quit 'other
     :ttl nil)
 
-  (setq! gptel-api-key (getenv "OPENAI_API_KEY")
-         gptel-temperature 1.0
-         gptel-display-buffer-action nil
-         gptel-expert-commands t
-         gptel-max-tokens 24576
-         gptel-use-tools t
-         gptel-include-tool-results t
-         gptel-track-media t
-         gptel--preset 'default
-         gptel-backend (gptel-make-gemini "Gemini"
-                         :stream t
-                         :key (getenv "GOOGLE_GENAI_API_KEY"))
-         gptel-model 'gemini-3-pro-preview
-         gptel-default-mode 'org-mode
-         gptel-log-level 'info
-         gptel-use-context 'user))
+  (setq gptel-api-key (getenv "OPENAI_API_KEY")
+        gptel-temperature 1.0
+        gptel-display-buffer-action nil
+        gptel-expert-commands t
+        gptel-max-tokens 24576
+        gptel-use-tools t
+        gptel-include-tool-results t
+        gptel-track-media t
+        gptel--preset 'code-analysis
+        gptel-backend (gptel-make-gemini "Gemini"
+                        :stream t
+                        :key (getenv "GOOGLE_GENAI_API_KEY"))
+        gptel-model 'gemini-3.1-pro-preview
+        gptel-default-mode 'org-mode
+        gptel-log-level 'info
+        gptel-use-context 'user))
 
 (use-package! hydra
   :defer
