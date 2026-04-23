@@ -183,6 +183,7 @@
     :config (require 'mcp-hub)
     :custom (mcp-hub-servers
              `(("git" . (:command "uvx" :args ("mcp-server-git")))
+               ("dash" . (:command "uvx" :args ("--from""git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server")))
                ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp")))
                ("agentdb" . (:command "bunx" :args ("--bun" "agentdb" "mcp" "start")))
                ("playwright" . (:command "bunx" :args ("--bun" "@playwright/mcp" "--browser" "webkit")))
@@ -204,18 +205,20 @@
     (let ((files-to-check '("AGENTS.md" "GEMINI.md" "CLAUDE.md"))
           (instructions '())
           (dir (expand-file-name default-directory))
-          (last-dir nil))
+          (last-dir nil)
+          (root (doom-project-root)))
       (while (not (equal dir last-dir))
         (dolist (file files-to-check)
           (let ((path (expand-file-name file dir)))
             (when (and (file-readable-p path) (not (file-directory-p path)))
-              (push (with-temp-buffer
-                      (insert-file-contents path)
-                      (buffer-string))
-                    instructions))))
+              (let ((rel-path (if root (file-relative-name path root) path)))
+                (push (with-temp-buffer
+                        (insert-file-contents path)
+                        (format "%s\n\n%s" rel-path (buffer-string)))
+                      instructions)))))
         (setq last-dir dir
               dir (file-name-directory (directory-file-name dir))))
-      `(("project_agents_instructions" . ,(reverse instructions)))))
+      `(("project_agents_instructions" . ,instructions))))
   (defun gptel-prompts-filter-nindent (content n)
     "Indent each line of CONTENT with N spaces."
     (replace-regexp-in-string "^" (make-string n ?\s) content))
@@ -291,7 +294,7 @@
         gptel-use-tools t
         gptel-include-tool-results t
         gptel-track-media t
-        gptel--preset 'code-analysis
+        gptel--preset 'default
         gptel-backend (gptel-make-gemini "Gemini"
                         :stream t
                         :key (getenv "GOOGLE_GENAI_API_KEY"))

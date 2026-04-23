@@ -90,7 +90,7 @@ shell_directory_timeout=900
 
 [Layout]
 output_lines=0
-left_panel_size=100
+left_panel_size=17
 top_panel_size=0
 message_visible=true
 keybar_visible=true
@@ -119,6 +119,7 @@ xterm-kitty=
 color_terminals=
 
 xterm-256color=
+xterm-ghostty=
 
 [Panels]
 show_mini_info=true
