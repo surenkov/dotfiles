@@ -237,19 +237,6 @@
     (add-hook 'gptel-prompts-prepare-template-env-functions #'gptel-prompts-add-filters)
     (gptel-prompts-update))
 
-  (defun my/gptel-remove-headings (beg end)
-    (when (derived-mode-p 'org-mode)
-      (save-excursion
-        (goto-char beg)
-        (while (re-search-forward org-heading-regexp end t)
-          (forward-line 0)
-          (delete-char (1+ (length (match-string 1))))
-          (insert-and-inherit "*")
-          (end-of-line)
-          (skip-chars-backward " \t\r")
-          (insert-and-inherit "*")))))
-  (add-hook! 'gptel-post-response-functions #'my/gptel-remove-headings)
-
   ;; DEFINE: Presets
   (gptel-make-preset 'default
     :description "Default preset"
@@ -273,7 +260,7 @@
     :backend (gptel-make-gemini "Gemini-Grounded"
                :stream t
                :request-params '(:tools [(:google_search ())])
-               :key (getenv "GOOGLE_GENAI_API_KEY")))
+               :key (getenv "GOOGLE_GENERATIVE_AI_API_KEY")))
 
   ;; DEFINE: Config
 
@@ -297,8 +284,8 @@
         gptel--preset 'default
         gptel-backend (gptel-make-gemini "Gemini"
                         :stream t
-                        :key (getenv "GOOGLE_GENAI_API_KEY"))
-        gptel-model 'gemini-3.1-pro-preview
+                        :key (getenv "GOOGLE_GENERATIVE_AI_API_KEY"))
+        gptel-model 'gemini-pro-latest
         gptel-default-mode 'org-mode
         gptel-log-level 'info
         gptel-use-context 'user))

@@ -1,7 +1,6 @@
 set fish_greeting
 
 set BREW_HOME /opt/homebrew
-set GEM_HOME $HOME/.gem
 set -gx PYENV_ROOT $HOME/.pyenv
 set -gx NVM_DIR $HOME/.nvm
 
@@ -14,18 +13,18 @@ set -gx EDITOR hx
 set -gx VISUAL hx
 
 set -gx LSP_USE_PLISTS true
-set -gx GDAL_LIBRARY_PATH "$(gdal-config --prefix)/lib/libgdal.dylib"
-set -gx GEOS_LIBRARY_PATH "$(geos-config --prefix)/lib/libgeos_c.dylib"
+set -gx GDAL_LIBRARY_PATH "$BREW_HOME/lib/libgdal.dylib"
+set -gx GEOS_LIBRARY_PATH "$BREW_HOME/lib/libgeos_c.dylib"
 
 set -gx RIPGREP_CONFIG_PATH $HOME/.ripgreprc
 set -gx FZF_DEFAULT_COMMAND 'rg --files'
 
-pyenv init - | source
 direnv hook fish | source
 
 alias emc='emacsclient -t'
 alias emd='emacs -nw --daemon'
 alias emstop="emacsclient -e '(kill-emacs)'"
+alias python=python3
 alias vim=nvim
 alias ipy=ipython3
 alias k=kubectl
