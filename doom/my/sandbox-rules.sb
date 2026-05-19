@@ -74,6 +74,8 @@
     (subpath (string-append (param "HOME_DIR") "/Library/Caches"))
     (subpath (string-append (param "HOME_DIR") "/.local/share"))
 
+    (subpath (string-append (param "HOME_DIR") "/go"))
+
     ;; Flutter / Dart tooling
     (subpath (string-append (param "HOME_DIR") "/.pub-cache"))
     (subpath (string-append (param "HOME_DIR") "/.flutter"))
