@@ -246,13 +246,11 @@
   (gptel-make-preset 'code-analysis
     :description "A preset optimized for read-only coding tasks"
     :parents 'default
-    :model 'gemini-3.1-pro-preview
     :system (alist-get 'code-analysis gptel-directives)
     :tools '("fd" "fzf" "rg" "cat"))
   (gptel-make-preset 'programming
     :description "A preset optimized for coding tasks"
     :parents 'code-analysis
-    :model 'gemini-3.5-flash
     :system (alist-get 'programming gptel-directives)
     :post (lambda () (setq gptel-confirm-tool-calls nil))
     :tools '("fd" "fzf" "rg" "cat" "bash" "apply_patch"))
