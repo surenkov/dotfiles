@@ -287,6 +287,10 @@
         gptel-backend (gptel-make-gemini "Gemini"
                         :stream t
                         :key (getenv "GOOGLE_GENERATIVE_AI_API_KEY"))
+        gptel-prompt-prefix-alist
+        '((markdown-mode . "## ")
+          (org-mode . "** ")
+          (text-mode . "## "))
         gptel-model 'gemini-3.5-flash
         gptel-default-mode 'org-mode
         gptel-log-level 'info
