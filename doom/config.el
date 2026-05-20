@@ -284,6 +284,7 @@
         gptel--preset 'default
         gptel-backend (gptel-make-gemini "Gemini"
                         :stream t
+                        :request-params '(:generationConfig (:thinkingConfig (:thinkingLevel "high")))
                         :key (getenv "GOOGLE_GENERATIVE_AI_API_KEY"))
         gptel-prompt-prefix-alist
         '((markdown-mode . "## ")

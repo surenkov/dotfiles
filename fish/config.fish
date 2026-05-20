@@ -29,3 +29,7 @@ alias vim=nvim
 alias ipy=ipython3
 alias k=kubectl
 alias clickhouse='podman run --rm -it clickhouse-server:24.8-alpine clickhouse'
+
+
+# Added by Antigravity CLI installer
+set -gx PATH "/Users/surenkov/.local/bin" $PATH
