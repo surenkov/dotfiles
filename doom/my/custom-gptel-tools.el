@@ -257,8 +257,29 @@ CALLBACK is called with the result string."
        nil t)
     (error (funcall callback (format "Error initiating request: %s" (error-message-string err))))))
 
+
+(defun my/skill-tool (&optional name)
+  "List available skills or read a specific skill's content."
+  (let ((skills-dir (expand-file-name "~/Projects/superpowers/skills")))
+    (if (not (file-exists-p skills-dir))
+        "Error: Superpowers skills directory not found."
+      (if (and name (not (string-empty-p name)))
+          (let ((skill-file (expand-file-name (format "%s/SKILL.md" name) skills-dir)))
+            (if (file-exists-p skill-file)
+                (with-temp-buffer
+                  (insert-file-contents skill-file)
+                  (buffer-string))
+              (format "Error: Skill '%s' not found." name)))
+        (let ((skills (directory-files skills-dir nil "^[^.]")))
+          (format "Available skills:\n%s" (mapconcat (lambda (s) (format "- %s" s)) skills "\n")))))))
+
 (defconst my/gptel-custom-tools
-  '((:name "fd"
+  '((:name "skills"
+     :function my/skill-tool
+     :category "agent"
+     :description "List available methodology skills or read a specific skill's instructions."
+     :args ((:name "name" :type string :description "Name of the skill to read. If omitted, lists available skills." :optional t)))
+    (:name "fd"
      :function my/fd-tool
      :category "filesystem"
      :description "List files and directories using `fd'. Smart defaults: lists immediate children, but switches to recursive search if a `pattern' is provided."

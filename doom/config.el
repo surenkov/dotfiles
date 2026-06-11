@@ -155,10 +155,10 @@
     :host "localhost:11434"
     :stream t
     :request-params '(:options (:num_ctx 32000))
-    :models '("gemma3n:latest"
-              "gpt-oss:latest"
-              "qwen3-coder:latest"
-              "minimax-m2.5:cloud"))
+    :models '("gemma4:e4b-mlx"
+              "gemma4:31b-mlx"
+              "translategemma:latest"
+              "qwen3-coder:latest"))
   (gptel-make-anthropic "Claude"
     :stream t
     :key (getenv "ANTHROPIC_API_KEY")
@@ -237,23 +237,24 @@
     (add-hook 'gptel-prompts-prepare-template-env-functions #'gptel-prompts-add-filters)
     (gptel-prompts-update))
 
+
   ;; DEFINE: Presets
   (gptel-make-preset 'default
     :description "Default preset"
     :system (alist-get 'default gptel-directives)
     :post (lambda () (setq gptel-confirm-tool-calls 'auto))
     :tools nil)
-  (gptel-make-preset 'code-analysis
-    :description "A preset optimized for read-only coding tasks"
+  (gptel-make-preset 'plan
+    :description "Design and plan implementation (Read-Only)"
     :parents 'default
-    :system (alist-get 'code-analysis gptel-directives)
-    :tools '("fd" "fzf" "rg" "cat"))
-  (gptel-make-preset 'programming
-    :description "A preset optimized for coding tasks"
-    :parents 'code-analysis
-    :system (alist-get 'programming gptel-directives)
+    :system (alist-get 'plan gptel-directives)
+    :tools '("fd" "fzf" "rg" "cat" "read_url" "skills"))
+  (gptel-make-preset 'build
+    :description "Execute implementation plans"
+    :parents 'plan
+    :system (alist-get 'build gptel-directives)
     :post (lambda () (setq gptel-confirm-tool-calls nil))
-    :tools '("fd" "fzf" "rg" "cat" "bash" "apply_patch"))
+    :tools '("fd" "fzf" "rg" "cat" "bash" "apply_patch" "read_url" "skills"))
   (gptel-make-preset 'gemini-grounded
     :description "Gemini with Google Search grounding"
     :parents 'default
