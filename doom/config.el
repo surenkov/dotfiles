@@ -74,7 +74,13 @@
 (cond ((featurep :system 'macos) ;; mac specific settings
        (setq insert-directory-program "/opt/homebrew/bin/gls")
        (add-to-list 'default-frame-alist '(ns-transparent-titlebar . t))
-       (add-to-list 'default-frame-alist '(ns-appearance . dark))))
+       (add-to-list 'default-frame-alist '(ns-appearance . dark))
+       (advice-add 'file-notify-add-watch :around
+                   (lambda (orig-fun &rest args)
+                     (condition-case err
+                         (apply orig-fun args)
+                       (file-notify-error
+                        nil))))))
 
 (connection-local-set-profile-variables
  'remote-direct-async-process
@@ -107,38 +113,29 @@
   (setq corfu-preview-current 'insert
         corfu-auto-delay 0.05))
 
-(setq lsp-disabled-clients '(flow-ls jsts-ls xmlls semgrep-ls pyright zuban-ls)
-      gc-cons-threshold (* 100 1024 1024)
+(setq gc-cons-threshold (* 100 1024 1024)
       read-process-output-max (* 1024 1024)
-      lsp-idle-delay 0.2
-      lsp-diagnostics-provider :auto
-      lsp-warn-no-matched-clients nil
-      lsp-ruff-ruff-args '("--preview")
-      lsp-log-io nil
-      lsp-idle-delay 0.500
-      lsp-use-plists t
-      lsp-enable-file-watchers nil
-      lsp-restart 'auto-restart
-      lsp-enable-dap-auto-configure t)
+      eglot-send-changes-idle-time 0.5
+      eglot-autoreconnect 3
+      eglot-events-buffer-config '(:size 0 :format nil))
 
-(after! lsp
-  (lsp-defcustom lsp-ty-experimental-rename t
+(after! eglot
+  (add-to-list 'eglot-ignored-server-capabilities :workspace/didChangeWatchedFiles)
+  (defcustom eglot-ty-experimental-rename t
     "Enable the experimental support for renaming symbols in the editor."
     :type 'boolean
-    :group 'ty-ls
-    :lsp-path "ty.experimental.rename")
-  (lsp-defcustom lsp-ty-experimental-auto-import t
+    :group 'eglot)
+  (defcustom eglot-ty-experimental-auto-import t
     "Enable the experimental support for auto-import code completions."
     :type 'boolean
-    :group 'ty-ls
-    :lsp-path "ty.experimental.autoImport")
-  (lsp-register-client
-   (make-lsp-client
-    :new-connection (lsp-stdio-connection '("zubanls"))
-    :activation-fn (lsp-activate-on "python")
-    :server-id 'zuban-ls
-    :priority -3
-    :add-on? t)))
+    :group 'eglot)
+  (defclass eglot-zuban-ls (eglot-lsp-server) ()
+    :documentation "Zuban LS Eglot client")
+  (cl-defmethod eglot-initialization-options ((_server eglot-zuban-ls))
+    `(:ty (:experimental (:rename ,(if eglot-ty-experimental-rename t :json-false)
+                          :autoImport ,(if eglot-ty-experimental-auto-import t :json-false)))))
+  (add-to-list 'eglot-server-programs
+               '((python-mode python-ts-mode) . (eglot-zuban-ls "zubanls"))))
 
 (after! project
   (add-to-list 'project-vc-ignores "./.venv/"))
@@ -245,7 +242,7 @@
     :post (lambda () (setq gptel-confirm-tool-calls 'auto))
     :tools nil)
   (gptel-make-preset 'plan
-    :description "Design and plan implementation (Read-Only)"
+    :description "Design and plan implementation"
     :parents 'default
     :system (alist-get 'plan gptel-directives)
     :tools '("fd" "fzf" "rg" "cat" "read_url" "skills"))
@@ -348,8 +345,8 @@
                  :desc "Agent Shell" "P" #'agent-shell
                  :desc "Activate gptel mode" "M" #'gptel-mode))
        (:prefix ("c" . "code")
-        :desc "Search LSP Symbols in buffer"
-        "F" #'consult-lsp-file-symbols)))
+        :desc "Search symbols in buffer"
+        "F" #'consult-imenu)))
 
 (map! :after transient
       :map transient-map
@@ -358,6 +355,7 @@
 (map! :after gptel
       (:mode gptel-mode
        :map gptel-mode-map
+       :i "RET" nil
        :n "RET"     #'gptel-send
        :n "C-c C-k" #'gptel-abort)
       (:mode gptel-context

@@ -20,6 +20,10 @@ Paths can be absolute or relative to the project root.")
   (expand-file-name "my/sandbox-rules.sb" doom-user-dir)
   "Path to the macOS sandbox profile (.sb) for gptel tools.")
 
+(defvar my/custom-gptel-skills-directory
+  (expand-file-name "my/skills" doom-user-dir)
+  "Path to the directory containing methodology skills.")
+
 (defun my--wrap-sandbox-command (command-args)
   "Wrap COMMAND-ARGS in `sandbox-exec` if the profile exists and we are local.
 Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
@@ -50,6 +54,56 @@ Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
                  (string-prefix-p dir-abs (file-name-as-directory full-path))))
              allowed-dirs)))
 
+(defun my--truncate-output (text &optional max-lines)
+  "Truncate TEXT to MAX-LINES (default 200).
+If TEXT exceeds MAX-LINES, return first half and last half with a truncation message."
+  (if (or (not text) (string-empty-p text))
+      ""
+    (let* ((max-lines (or max-lines 200))
+           (lines (split-string text "\n"))
+           (len (length lines)))
+      (if (<= len max-lines)
+          text
+        (let* ((keep (or (/ max-lines 2) 100))
+               (first-part (cl-subseq lines 0 keep))
+               (last-part (cl-subseq lines (- len keep) len))
+               (msg (format "\n\n[... Truncated %d lines from middle ...]\n\n" (- len (* keep 2)))))
+          (concat (mapconcat #'identity first-part "\n")
+                  msg
+                  (mapconcat #'identity last-part "\n")))))))
+
+(defun my--get-diagnostics-for-file (path)
+  "Retrieve active diagnostics/errors for the file at PATH.
+Checks Flycheck, Flymake, and LSP (Eglot or lsp-mode) if available."
+  (let ((buf (and path (find-buffer-visiting path))))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (let (diags)
+          ;; 1. Check Flycheck
+          (when (and (bound-and-true-p flycheck-mode)
+                     (boundp 'flycheck-current-errors))
+            (dolist (err flycheck-current-errors)
+              (push (format "Flycheck [%s] Line %d: %s"
+                            (symbol-name (flycheck-error-level err))
+                            (flycheck-error-line err)
+                            (flycheck-error-message err))
+                    diags)))
+          ;; 2. Check Flymake (used by Eglot)
+          (when (and (bound-and-true-p flymake-mode)
+                     (fboundp 'flymake-diagnostics))
+            (dolist (diag (flymake-diagnostics))
+              (let* ((locus (flymake-diagnostic-buffer diag))
+                     (beg (flymake-diagnostic-beg diag))
+                     (line (with-current-buffer locus
+                             (line-number-at-pos beg))))
+                (push (format "Flymake [%s] Line %d: %s"
+                              (symbol-name (flymake-diagnostic-type diag))
+                              line
+                              (flymake-diagnostic-text diag))
+                      diags))))
+          (when diags
+            (mapconcat #'identity (nreverse diags) "\n")))))))
+
 (defun my--async-exec (name command callback &optional input)
   "Generic helper to run a process asynchronously.
 NAME is the process name, COMMAND is the list of args,
@@ -68,7 +122,8 @@ CALLBACK is called with (exit-code output), and optional INPUT is sent to stdin.
                           (output (with-current-buffer output-buffer
                                     (string-trim (buffer-string)))))
                       (kill-buffer output-buffer)
-                      (funcall callback exit-code output)))))))
+                      ;; Truncate output to avoid overloading model context (default 300 lines)
+                      (funcall callback exit-code (my--truncate-output output 300))))))))
     (when input
       (process-send-string proc input))
     (process-send-eof proc) ;; Close stdin to prevent hanging
@@ -205,17 +260,42 @@ MAX-RESULTS is the maximum number of matches to return."
         (list shell-file-name shell-command-switch command))
        (lambda (_code out) (funcall callback (if (string-empty-p out) "No matches found" out)))))))
 
+(defun my--get-files-from-patch (patch)
+  "Extract file paths from PATCH string."
+  (let ((files nil)
+        (lines (split-string patch "\n")))
+    (dolist (line lines)
+      (when (string-match "^\\+\\+\\+\\s-+\\(?:b/\\)?\\(.+\\)$" line)
+        (let ((file (match-string 1 line)))
+          (unless (equal file "/dev/null")
+            (push file files)))))
+    (delete-dups (nreverse files))))
+
 (defun my/apply-patch-tool (callback patch)
   "Apply PATCH using git apply and call CALLBACK with the result."
-  (let ((patch-content (if (string-suffix-p "\n" patch) patch (concat patch "\n")))
-        (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--" "-")))
+  (let* ((patch-content (if (string-suffix-p "\n" patch) patch (concat patch "\n")))
+         (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--" "-"))
+         (files (my--get-files-from-patch patch)))
     (my--async-exec
      "gptel-git-apply"
      (my--wrap-sandbox-command command)
      (lambda (code out)
-       (funcall callback (if (zerop code)
-                             out
-                           (format "Error applying patch (exit code %d):\n%s" code out))))
+       (if (not (zerop code))
+           (funcall callback (format "Error applying patch (exit code %d):\n%s" code out))
+         ;; Patch applied successfully. Wait 1.5 seconds for flycheck/LSP to update diagnostics.
+         (run-with-timer
+          1.5 nil
+          (lambda ()
+            (let ((diag-reports nil))
+              (dolist (file files)
+                (let ((diags (my--get-diagnostics-for-file file)))
+                  (when diags
+                    (push (format "File `%s` diagnostics:\n%s" file diags) diag-reports))))
+              (if diag-reports
+                  (funcall callback (format "%s\n\nWARNING: Post-patch compilation/linting errors found:\n%s"
+                                            out
+                                            (mapconcat #'identity (nreverse diag-reports) "\n\n")))
+                (funcall callback out)))))))
      patch-content)))
 
 (defun my/shell-tool (callback command)
@@ -260,9 +340,9 @@ CALLBACK is called with the result string."
 
 (defun my/skill-tool (&optional name)
   "List available skills or read a specific skill's content."
-  (let ((skills-dir (expand-file-name "~/Projects/superpowers/skills")))
+  (let ((skills-dir my/custom-gptel-skills-directory))
     (if (not (file-exists-p skills-dir))
-        "Error: Superpowers skills directory not found."
+        "Error: Methodology skills directory not found."
       (if (and name (not (string-empty-p name)))
           (let ((skill-file (expand-file-name (format "%s/SKILL.md" name) skills-dir)))
             (if (file-exists-p skill-file)

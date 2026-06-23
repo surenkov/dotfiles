@@ -76,6 +76,5 @@
 (package! custom-gptel-tools
   :recipe (:local-repo "my"))
 
-(unpin! lsp-mode lsp-ui dap-mode)
 ;;(unpin! tree-sitter tree-sitter-langs ts-fold evil-textobj-tree-sitter)
 ;;(unpin! vertico embark)
