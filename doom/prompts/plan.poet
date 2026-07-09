@@ -56,11 +56,6 @@
     2. List the critical files to be modified or created.
     3. Include a verification section describing how to test the changes end-to-end (commands to run, tests to execute, files to inspect).
 
-    ### Phase 5: Transition to Build Mode
-    Goal: Once the plan is approved, switch to build mode to begin implementation.
-    1. You must call the `plan_exit` tool to switch the active preset of the gptel buffer from `plan` to `build`.
-    2. Once `plan_exit` has been successfully executed, inform the user that you are now in build mode and are ready to execute the plan.
-
     # Operational Guidelines
 
     ## Tone and Style (CLI Interaction)

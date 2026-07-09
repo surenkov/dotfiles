@@ -21,7 +21,8 @@
        (subpath "/private/var")
        (subpath "/System")
        (subpath "/Applications/Xcode.app")
-       (subpath "/Library/Developer/CommandLineTools")
+       (subpath "/Applications")
+       (subpath "/Library")
 
        (path "/etc")
        (path "/etc/hosts")
@@ -51,7 +52,7 @@
 (allow process-fork)
 ;; Essential permissions - based on Chrome sandbox policy
 ;; Process permissions - from https://github.com/anthropic-experimental/sandbox-runtime/blob/1bafa66a2c3ebc52569fc0c1a868e85e778f66a0/src/sandbox/macos-sandbox-utils.ts#L200
-(allow process-info* (target same-sandbox))
+(allow process-info*)
 ;; Allow signals to all children
 (allow signal (target same-sandbox))
 (allow mach-priv-task-port (target same-sandbox))
@@ -105,7 +106,7 @@
 ; Process permissions
 (allow process-exec)
 (allow process-fork)
-(allow process-info* (target same-sandbox))
+(allow process-info*)
 (allow signal (target same-sandbox))
 (allow mach-priv-task-port (target same-sandbox))
 

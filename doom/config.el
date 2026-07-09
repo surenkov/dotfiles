@@ -180,7 +180,7 @@
     :config (require 'mcp-hub)
     :custom (mcp-hub-servers
              `(("git" . (:command "uvx" :args ("mcp-server-git")))
-               ("dash" . (:command "uvx" :args ("--from""git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server")))
+               ("dash" . (:command "uvx" :args ("--from" "git+https://github.com/Kapeli/dash-mcp-server.git" "dash-mcp-server")))
                ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp")))
                ("agentdb" . (:command "bunx" :args ("--bun" "agentdb" "mcp" "start")))
                ("playwright" . (:command "bunx" :args ("--bun" "@playwright/mcp" "--browser" "webkit")))
