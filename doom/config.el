@@ -174,7 +174,8 @@
   (use-package! custom-gptel-tools
     :config
     (setq my/custom-gptel-tools-whitelist-directories '("~/Projects"))
-    (mapc (apply-partially #'apply #'gptel-make-tool) my/gptel-custom-tools))
+    (mapc (apply-partially #'apply #'gptel-make-tool) my/gptel-custom-tools)
+    (my/gptel-update-skills t))
 
   (use-package! mcp
     :config (require 'mcp-hub)
@@ -200,7 +201,7 @@
 
   (defun gptel-prompts-project-agents-instructions (_file)
     "Read agent's instructions from the current directory and all parents up to root."
-    (let ((files-to-check '("AGENTS.md" "GEMINI.md" "CLAUDE.md"))
+    (let ((files-to-check '("AGENTS.md" "CONTEXT.md" "GEMINI.md" "CLAUDE.md"))
           (instructions '())
           (dir (expand-file-name default-directory))
           (last-dir nil)
@@ -217,6 +218,7 @@
         (setq last-dir dir
               dir (file-name-directory (directory-file-name dir))))
       `(("project_agents_instructions" . ,instructions))))
+
   (defun gptel-prompts-filter-nindent (content n)
     "Indent each line of CONTENT with N spaces."
     (replace-regexp-in-string "^" (make-string n ?\s) content))
@@ -246,20 +248,13 @@
     :description "Design and plan implementation"
     :parents 'default
     :system (alist-get 'plan gptel-directives)
-    :tools '("fd" "fzf" "rg" "cat" "read_url" "skills"))
+    :tools '("fd" "fzf" "rg" "cat" "read_url" "skills" "agent" "todo_write"))
   (gptel-make-preset 'build
     :description "Execute implementation plans"
     :parents 'plan
     :system (alist-get 'build gptel-directives)
     :post (lambda () (setq gptel-confirm-tool-calls nil))
-    :tools '("fd" "fzf" "rg" "cat" "bash" "apply_patch" "read_url" "skills"))
-  (gptel-make-preset 'gemini-grounded
-    :description "Gemini with Google Search grounding"
-    :parents 'default
-    :backend (gptel-make-gemini "Gemini-Grounded"
-               :stream t
-               :request-params '(:tools [(:google_search ())])
-               :key (getenv "GOOGLE_GENERATIVE_AI_API_KEY")))
+    :tools '("fd" "fzf" "rg" "cat" "bash" "edit" "read_url" "skills" "agent" "todo_write"))
 
   ;; DEFINE: Config
 

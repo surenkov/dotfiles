@@ -8,8 +8,11 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'doom)
+(require 'custom-gptel-skills)
+(require 'custom-gptel-agents)
+(require 'custom-gptel-ui)
 
+(defvar doom-user-dir)
 (declare-function doom-project-root "doom-lib")
 
 (defvar my/custom-gptel-tools-whitelist-directories nil
@@ -17,11 +20,11 @@
 Paths can be absolute or relative to the project root.")
 
 (defvar my/custom-gptel-sandbox-profile-path
-  (expand-file-name "my/sandbox-rules.sb" doom-user-dir)
+  (expand-file-name "my/sandbox-rules.sb" (if (boundp 'doom-user-dir) doom-user-dir "~/.config/doom/"))
   "Path to the macOS sandbox profile (.sb) for gptel tools.")
 
 (defvar my/custom-gptel-skills-directory
-  (expand-file-name "my/skills" doom-user-dir)
+  (expand-file-name "my/skills" (if (boundp 'doom-user-dir) doom-user-dir "~/.config/doom/"))
   "Path to the directory containing methodology skills.")
 
 (defun my--wrap-sandbox-command (command-args)
@@ -32,7 +35,8 @@ Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
         (let* ((root (expand-file-name (doom-project-root)))
                (home (expand-file-name "~"))
                (whitelist (mapcar (lambda (d) (expand-file-name d root))
-                                  my/custom-gptel-tools-whitelist-directories))
+                                  (append my/custom-gptel-tools-whitelist-directories
+                                          (my/get-resolved-skill-dirs))))
                (whitelist-str (mapconcat #'identity whitelist ":")))
           (append (list sandbox-exec
                         "-f" my/custom-gptel-sandbox-profile-path
@@ -44,19 +48,21 @@ Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
       command-args)))
 
 (defun my--path-allowed-p (path)
-  "Return non-nil if PATH is within the project root or whitelisted directories."
-  (let* ((root (expand-file-name (doom-project-root)))
-         (full-path (expand-file-name path root))
-         (allowed-dirs (cons root (mapcar (lambda (d) (expand-file-name d root))
-                                          my/custom-gptel-tools-whitelist-directories))))
+  "Return non-nil if PATH is within allowed directories.
+Resolves symlinks before checking."
+  (let* ((root (file-truename (expand-file-name (doom-project-root))))
+         (full-path (file-truename (expand-file-name path root)))
+         (allowed-dirs (cons root (mapcar (lambda (d) (file-truename (expand-file-name d root)))
+                                          (append my/custom-gptel-tools-whitelist-directories
+                                                  (my/get-resolved-skill-dirs))))))
     (cl-some (lambda (dir)
-               (let ((dir-abs (file-name-as-directory (expand-file-name dir))))
+               (let ((dir-abs (file-name-as-directory dir)))
                  (string-prefix-p dir-abs (file-name-as-directory full-path))))
              allowed-dirs)))
 
 (defun my--truncate-output (text &optional max-lines)
   "Truncate TEXT to MAX-LINES (default 200).
-If TEXT exceeds MAX-LINES, return first half and last half with a truncation message."
+If TEXT exceeds MAX-LINES, return first and last portions with message."
   (if (or (not text) (string-empty-p text))
       ""
     (let* ((max-lines (or max-lines 200))
@@ -271,7 +277,7 @@ MAX-RESULTS is the maximum number of matches to return."
             (push file files)))))
     (delete-dups (nreverse files))))
 
-(defun my/apply-patch-tool (callback patch)
+(defun my/edit-tool (callback patch)
   "Apply PATCH using git apply and call CALLBACK with the result."
   (let* ((patch-content (if (string-suffix-p "\n" patch) patch (concat patch "\n")))
          (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--" "-"))
@@ -309,56 +315,72 @@ MAX-RESULTS is the maximum number of matches to return."
                            out
                          (format "Command failed (exit code %d):\n%s" code out))))))
 
+(defvar my/read-url-timeout 10
+  "Timeout in seconds for `my/read-url-tool`.")
+
 (defun my/read-url-tool (callback url)
-  "Fetch content from a URL asynchronously.
-CALLBACK is called with the result string."
-  (condition-case err
-      (url-retrieve
-       url
-       (lambda (status)
-         (condition-case parse-err
-             (let ((http-err (plist-get status :error)))
-               (if http-err
-                   (funcall callback (format "Error fetching URL: %s" http-err))
-                 (set-buffer-multibyte t)
-                 (goto-char (point-min))
-                 ;; Find end of HTTP headers
-                 (if (not (re-search-forward "^$" nil t))
-                     (funcall callback "Error: Invalid HTTP response (no headers separator found).")
-                   (forward-line 1)
-                   (let ((content (buffer-substring-no-properties (point) (point-max))))
-                     (with-temp-buffer
-                       (insert content)
-                       (ignore-errors (shr-render-region (point-min) (point-max)))
-                       (funcall callback (string-trim (buffer-string))))))))
-           (error (funcall callback (format "Error processing response: %s" parse-err))))
-         (when (buffer-live-p (current-buffer))
-           (kill-buffer (current-buffer))))
-       nil t)
-    (error (funcall callback (format "Error initiating request: %s" (error-message-string err))))))
+  "Fetch content from a URL asynchronously with a timeout."
+  (let* ((timeout-fired nil)
+         (timer nil)
+         (retrieval-buf nil))
+    (setq retrieval-buf
+          (condition-case err
+              (url-retrieve
+               url
+               (lambda (status)
+                 (when timer (cancel-timer timer) (setq timer nil))
+                 (unless timeout-fired
+                   (condition-case parse-err
+                       (let ((http-err (plist-get status :error)))
+                         (if http-err
+                             (funcall callback (format "Error fetching URL: %s" http-err))
+                           (set-buffer-multibyte t)
+                           (goto-char (point-min))
+                           (if (not (re-search-forward "^$" nil t))
+                               (funcall callback "Error: Invalid HTTP response (no headers separator found).")
+                             (forward-line 1)
+                             (let ((content (buffer-substring-no-properties (point) (point-max))))
+                               (with-temp-buffer
+                                 (insert content)
+                                 (ignore-errors (shr-render-region (point-min) (point-max)))
+                                 (funcall callback (string-trim (buffer-string))))))))
+                     (error (funcall callback (format "Error processing response: %s" parse-err))))
+                   (when (buffer-live-p (current-buffer))
+                     (kill-buffer (current-buffer)))))
+               nil t)
+            (error
+             (funcall callback (format "Error initiating request: %s" (error-message-string err)))
+             nil)))
+    (when (buffer-live-p retrieval-buf)
+      (setq timer
+            (run-with-timer
+             my/read-url-timeout nil
+             (lambda ()
+               (setq timeout-fired t)
+               (when (buffer-live-p retrieval-buf) (kill-buffer retrieval-buf))
+               (funcall callback (format "Error: Request timed out after %d seconds." my/read-url-timeout))))))))
 
 
 (defun my/skill-tool (&optional name)
-  "List available skills or read a specific skill's content."
-  (let ((skills-dir my/custom-gptel-skills-directory))
-    (if (not (file-exists-p skills-dir))
-        "Error: Methodology skills directory not found."
-      (if (and name (not (string-empty-p name)))
-          (let ((skill-file (expand-file-name (format "%s/SKILL.md" name) skills-dir)))
-            (if (file-exists-p skill-file)
-                (with-temp-buffer
-                  (insert-file-contents skill-file)
-                  (buffer-string))
-              (format "Error: Skill '%s' not found." name)))
-        (let ((skills (directory-files skills-dir nil "^[^.]")))
-          (format "Available skills:\n%s" (mapconcat (lambda (s) (format "- %s" s)) skills "\n")))))))
-
+  "List available methodology skills or read a specific skill's instructions."
+  (if (and name (not (string-empty-p name)))
+      (my/gptel-get-skill-body name)
+    (let ((skills (my/gptel-update-skills)))
+      (if (null skills)
+          "No available methodology skills found."
+        (format "Available skills:\n%s"
+                (mapconcat (lambda (s) (format "- %s: %s"
+                                               (car s)
+                                               (or (plist-get (cdr (cdr s)) :description)
+                                                   "(no description)")))
+                           skills "\n"))))))
+ 
 (defconst my/gptel-custom-tools
   '((:name "skills"
      :function my/skill-tool
      :category "agent"
-     :description "List available methodology skills or read a specific skill's instructions."
-     :args ((:name "name" :type string :description "Name of the skill to read. If omitted, lists available skills." :optional t)))
+     :description "Retrieve detailed instructions and guidelines for a specific development methodology skill."
+     :args ((:name "name" :type string :description "The name of the skill to retrieve instructions for.")))
     (:name "fd"
      :function my/fd-tool
      :category "filesystem"
@@ -395,13 +417,13 @@ CALLBACK is called with the result string."
      :args ((:name "path" :type string :description "Path to the file to read.")
             (:name "offset" :type integer :description "Line number to start reading from (1-based). Default: 1." :optional t)
             (:name "limit" :type integer :description "Maximum number of lines to return. Default: 2000." :optional t)))
-    (:name "apply_patch"
-     :function my/apply-patch-tool
+    (:name "edit"
+     :function my/edit-tool
      :category "filesystem"
      :description "Apply a GNU unified diff format patch to one or more files. This is the primary tool for code modifications.
 - Use relative paths from the project root in --- a/ and +++ b/ headers.
 - Include @@ -start,len +start,len @@ hunk headers.
-- Provide at least 3 lines of context (lines starting with ' ') around changes to ensure the patch applies cleanly.
+- Provide at least 3 lines of context (lines starting with ' ' or '+' or '-') around changes to ensure the patch applies cleanly.
 - To create a new file, use --- /dev/null as the source.
 - To delete a file, use +++ /dev/null as the destination.
 - Multiple files can be patched in a single call by concatenating their diffs.
@@ -422,7 +444,34 @@ The tool automatically handles minor line count mismatches and whitespace variat
      :description "Fetch and read the visible text content of a URL."
      :async t
      :confirm t
-     :args ((:name "url" :type string :description "The URL to fetch.")))))
+     :args ((:name "url" :type string :description "The URL to fetch.")))
+    (:name "agent"
+     :function my/gptel-agent--task
+     :category "agent"
+     :description "Delegate a complex sub-task to a dedicated sub-agent.
+The sub-agent is a derivative of yourself and can only use a subset of the tools currently available to you.
+Use this to parallelize work, focus on a narrow problem, or distribute complex research."
+     :async t
+     :confirm t
+     :args ((:name "description" :type string :description "A concise description of the task for the sub-agent.")
+            (:name "prompt" :type string :description "The detailed instructions and objective for the sub-agent.")
+            (:name "tools"
+             :type array
+             :description "The subset of your active tools to delegate to this sub-agent (e.g., [\"fd\", \"rg\", \"cat\"]). You can only delegate tools that are currently active in your own session."
+             :items (:type string))))
+    (:name "todo_write"
+     :function my/gptel-write-todo
+     :category "agent"
+     :description "Display a formatted task list/todo list in the buffer. Use this to track plan execution progress.
+Completed items are displayed with strikethrough and shadow face. Exactly one item should have status \"in_progress\"."
+     :confirm nil
+     :args ((:name "todos"
+             :type array
+             :description "List/vector of maps, each with keys :content, :activeForm, and :status (\"completed\", \"in_progress\", or \"todo\")."
+             :items (:type object
+                     :properties (:content (:type string :minLength 1 :description "Imperative form describing what needs to be done (e.g., 'Run tests')")
+                                  :status (:type string :enum ["todo" "in_progress" "completed"] :description "Task status: todo, in_progress, or completed (exactly one)")
+                                  :activeForm (:type string :minLength 1 :description "Present continuous form shown during execution (e.g., 'Running tests')"))))))))
 
 (provide 'custom-gptel-tools)
 ;;; custom-gptel-tools.el ends here

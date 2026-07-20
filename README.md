@@ -33,7 +33,7 @@ Useful plugins:
 symlink `./ghostty` to `~/.config/ghostty`;
 
 
-### Aacritty
+### Alacritty
 symlink `alacritty.yml` to `~/.config/alacritty/alacritty.yml`;
 
 ### Kitty
