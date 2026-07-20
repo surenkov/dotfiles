@@ -163,12 +163,12 @@
                       :context_management (:edits [(:type "clear_thinking_20251015")
                                                    (:type "clear_tool_uses_20250919")
                                                    (:type "compact_20260112")]))
-    :header (lambda () (when-let* ((key (getenv "ANTHROPIC_API_KEY")))
-                         `(("x-api-key" . ,key)
-                           ("anthropic-version" . "2023-06-01")
-                           ("anthropic-beta" . "extended-cache-ttl-2025-04-11")
-                           ("anthropic-beta" . "context-management-2025-06-27")
-                           ("anthropic-beta" . "compact-2026-01-12")))))
+    :header (lambda (_info) (when-let* ((key (getenv "ANTHROPIC_API_KEY")))
+                              `(("x-api-key" . ,key)
+                                ("anthropic-version" . "2023-06-01")
+                                ("anthropic-beta" . "extended-cache-ttl-2025-04-11")
+                                ("anthropic-beta" . "context-management-2025-06-27")
+                                ("anthropic-beta" . "compact-2026-01-12")))))
 
   ;; DEFINE: Tools
   (use-package! custom-gptel-tools
@@ -184,6 +184,7 @@
                ("context7" . (:command "bunx" :args ("--bun" "@upstash/context7-mcp")))
                ("agentdb" . (:command "bunx" :args ("--bun" "agentdb" "mcp" "start")))
                ("playwright" . (:command "bunx" :args ("--bun" "@playwright/mcp" "--browser" "webkit")))
+               ("kagi" . (:command "uvx" :args ("kagimcp")))
                ("atlassian" . (:command "podman"
                                :args ("run" "-i" "--rm"
                                       "-e" "CONFLUENCE_*"
@@ -303,9 +304,6 @@
     ("k" evil-window-increase-height "increase height")
     ("l" evil-window-increase-width "increase width")
     ("q" nil "quit")))
-(map! :leader
-      :prefix ("w" . "window")
-      :n "r" #'hydra/evil-window-resize/body)
 
 ;; Whenever you reconfigure a package, make sure to wrap your config in an
 ;; `after!' block, otherwise Doom's defaults may override your settings. E.g.
@@ -339,18 +337,24 @@
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 
-(map! (:leader
-       (:prefix ("o" . "open")
-                (:prefix ("l" . "llm")
-                 :desc "Agent Shell" "P" #'agent-shell
-                 :desc "Activate gptel mode" "M" #'gptel-mode))
-       (:prefix ("c" . "code")
-        :desc "Search symbols in buffer"
-        "F" #'consult-imenu)))
 
-(map! :after transient
-      :map transient-map
-      [escape] #'transient-quit-one)
+(map! :desc "Agent Shell"        :n "SPC o l P" #'agent-shell
+      :desc "Toggle gptel mode"  :n "SPC o l M" #'gptel-mode)
+
+(map! :after consult
+      :desc "Search symbols in buffer" :n "SPC c F" #'consult-imenu)
+
+(map! :after evil
+      :n "C-i" #'evil-jump-forward
+      :n "C-o" #'evil-jump-backward
+      :leader :n "w r" #'hydra/evil-window-resize/body)
+
+(map! :after evil
+      :leader :n "w r" #'hydra/evil-window-resize/body)
+
+(map! :n "g r" #'+lookup/references
+      :n "g i" #'+lookup/implementations
+      :n "g D" #'+lookup/type-definition)
 
 (map! :after gptel
       (:mode gptel-mode
@@ -364,13 +368,6 @@
        :n "q"   #'gptel-context-quit
        :n "RET" #'gptel-context-visit
        :n "d"   #'gptel-context-flag-deletion))
-
-(map! :n "C-i"      #'evil-jump-forward
-      :n "C-o"      #'evil-jump-backward
-      :n "SPC f t"  #'treemacs
-      :n "g r"      #'+lookup/references
-      :n "g i"      #'+lookup/implementations
-      :n "g D"      #'+lookup/type-definition)
 
 (custom-set-faces!
   '(gptel-context-highlight-face :background "#2C333F")

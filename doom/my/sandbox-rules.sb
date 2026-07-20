@@ -75,6 +75,9 @@
     (subpath (string-append (param "HOME_DIR") "/Library/Caches"))
     (subpath (string-append (param "HOME_DIR") "/.local/share"))
 
+    ;; Xcode Developer directories (DerivedData, etc.)
+    (subpath (string-append (param "HOME_DIR") "/Library/Developer"))
+
     (subpath (string-append (param "HOME_DIR") "/go"))
 
     ;; Flutter / Dart tooling
