@@ -140,10 +140,6 @@
 (after! project
   (add-to-list 'project-vc-ignores "./.venv/"))
 
-(after! agent-shell
-  (setq agent-shell-google-authentication
-        (agent-shell-google-make-authentication :login t)))
-
 (after! gptel
   (require 'gptel-integrations)
 
@@ -343,8 +339,7 @@
 ;; they are implemented.
 
 
-(map! :desc "Agent Shell"        :n "SPC o l P" #'agent-shell
-      :desc "Toggle gptel mode"  :n "SPC o l M" #'gptel-mode)
+(map! :desc "Toggle gptel mode"  :n "SPC o l M" #'gptel-mode)
 
 (map! :after consult
       :desc "Search symbols in buffer" :n "SPC c F" #'consult-imenu)

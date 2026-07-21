@@ -64,10 +64,6 @@
 (package! gptel-magit :disable t)
 (package! gptel-quick :disable t)
 
-(package! shell-maker)
-(package! acp)
-(package! agent-shell)
-
 ;;(package! hledger-mode)
 ;;(package! k8s-mode)
 ;;(package! vue-mode)
