@@ -1,4 +1,7 @@
 ;;; custom-gptel-tools-test.el --- Tests for custom gptel tools  -*- lexical-binding: t; -*-
+;;
+;; To run these tests in batch mode, execute the following command:
+;;   emacs -batch -l doom/my/custom-gptel-tools-test.el -f ert-run-tests-batch-and-exit
 
 (require 'ert)
 (require 'cl-lib)
@@ -221,3 +224,67 @@
       (should (member "outline" captured-command))
       (should (member "--match" captured-command))
       (should (member "outline-filter" captured-command)))))
+
+(ert-deftest test-gptel-agent-dynamic-schema-restriction ()
+  (let* ((mock-agent-tool (make-gptel-tool))
+         (gptel-tools '("fd" "rg" "agent")))
+    (cl-letf* (((symbol-function 'gptel-get-tool) (lambda (name) (if (or (equal name "agent") (equal name '("agent" "agent"))) mock-agent-tool)))
+               ((symbol-function 'gptel-tool-name) (lambda (t-spec) t-spec)))
+      (setf (gptel-tool-args mock-agent-tool)
+            '((:name "description" :type string)
+              (:name "prompt" :type string)
+              (:name "tools" :type array :items (:type string))))
+      (my/gptel-agent-update-tool-schema)
+      (let* ((args (gptel-tool-args mock-agent-tool))
+             (tools-arg (cl-find "tools" args :key (lambda (arg) (plist-get arg :name)) :test #'equal))
+             (items (plist-get tools-arg :items)))
+        (should tools-arg)
+        (should (equal (plist-get items :type) 'string))
+        (should (equal (plist-get items :enum) ["fd" "rg"]))))))
+
+(ert-deftest test-gptel-tools-order-invariant ()
+  "Ensure `gptel-tools' order is strictly preserved to maintain model-side context caching."
+  (let* ((mock-agent-tool (make-gptel-tool))
+         (mock-skill-tool (make-gptel-tool))
+         (original-tools (list "tool1" "tool2" "agent" "tool3"))
+         (gptel-tools original-tools))
+    (cl-letf* (((symbol-function 'gptel-get-tool) (lambda (name)
+                                                    (cond
+                                                     ((or (equal name "agent") (equal name '("agent" "agent"))) mock-agent-tool)
+                                                     ((equal name "skill") mock-skill-tool)
+                                                     (t nil))))
+               ((symbol-function 'gptel-tool-name) (lambda (t-spec) t-spec))
+               (original-copy (copy-sequence gptel-tools)))
+      (my/gptel-agent-update-tool-schema)
+      (my/gptel-skills-update-tool-schema-internal)
+      (should (eq gptel-tools original-tools))
+      (should (equal gptel-tools original-copy)))))
+
+(ert-deftest test-gptel-agent-schema-updates-correctly-with-category-clash ()
+  "Verify that update-tool-schema successfully resolves the agent tool when its name is also a category."
+  (let* ((mock-agent-tool (make-gptel-tool))
+         (gptel-tools '("fd" "rg" "agent"))
+         (called-with-path nil))
+    (cl-letf* (((symbol-function 'gptel-get-tool)
+                (lambda (path)
+                  (setq called-with-path path)
+                  (cond
+                   ;; If called with string "agent", simulate the bug by returning a list of tools
+                   ((equal path "agent")
+                    (list (make-gptel-tool) mock-agent-tool (make-gptel-tool)))
+                   ;; If called with list, return the correct single tool
+                   ((equal path '("agent" "agent"))
+                    mock-agent-tool)
+                   (t nil))))
+               ((symbol-function 'gptel-tool-name) (lambda (t-spec) t-spec)))
+      (setf (gptel-tool-args mock-agent-tool)
+            '((:name "description" :type string)
+              (:name "prompt" :type string)
+              (:name "tools" :type array :items (:type string))))
+      (my/gptel-agent-update-tool-schema)
+      (should (equal called-with-path '("agent" "agent")))
+      (let* ((args (gptel-tool-args mock-agent-tool))
+             (tools-arg (cl-find "tools" args :key (lambda (arg) (plist-get arg :name)) :test #'equal))
+             (items (plist-get tools-arg :items)))
+        (should tools-arg)
+        (should (equal (plist-get items :enum) ["fd" "rg"]))))))

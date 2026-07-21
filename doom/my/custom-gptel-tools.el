@@ -477,7 +477,7 @@ EXTRA-ARGS is an optional list of extra string flags."
     (:name "ast-grep"
      :function my/ast-grep-tool
      :category "filesystem"
-     :description "Search, scan, or outline codebase structure using ast-grep. Requires ast-grep CLI tool."
+     :description "Search, scan, or outline codebase structure using ast-grep."
      :async t
      :args ((:name "command" :type string :description "The ast-grep subcommand to run: 'run' (for pattern-based search), 'scan' (for rule-based scanning), or 'outline' (for structural code maps)." :enum ["run" "scan" "outline"])
             (:name "path" :type string :description "Path relative to the project root to perform the search or outline. Defaults to project root '.'." :optional t)
