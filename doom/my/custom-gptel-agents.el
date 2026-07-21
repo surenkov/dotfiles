@@ -218,14 +218,14 @@
                     (:name "prompt" :type "string" :description "The detailed instructions and objective for the sub-agent.")
                     (:name "tools"
                      :type "array"
-                     :description ,"The subset of your active tools to delegate to this sub-agent."
+                     :description ,"The subset of your tools to delegate to this sub-agent."
                      :items (:type "string" :enum ,enum-vals)))))
         (setf (gptel-tool-args tool)
               '((:name "description" :type "string" :description "A concise description of the task for the sub-agent.")
                 (:name "prompt" :type "string" :description "The detailed instructions and objective for the sub-agent.")
                 (:name "tools"
                  :type "array"
-                 :description "The subset of your active tools to delegate to this sub-agent (e.g., [\"fd\", \"rg\", \"cat\"]). You can only delegate tools that are currently active in your own session."
+                 :description "The subset of your tools to delegate to this sub-agent (e.g., [\"fd\", \"rg\", \"cat\"]). You can only delegate tools that are currently active in your own session."
                  :items (:type "string"))))))))
 
 (defun my/gptel-agent-update-tool-schema-advice (&rest _args)

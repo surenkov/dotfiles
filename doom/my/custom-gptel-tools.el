@@ -317,7 +317,7 @@ MAX-RESULTS is the maximum number of matches to return."
 (defun my/edit-tool (callback patch)
   "Apply PATCH using git apply and call CALLBACK with the result."
   (let* ((patch-content (if (string-suffix-p "\n" patch) patch (concat patch "\n")))
-         (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--" "-"))
+         (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--allow-empty" "--" "-"))
          (files (my--get-files-from-patch patch)))
     (my--async-exec
      "gptel-git-apply"
@@ -561,13 +561,12 @@ Use this to parallelize work, focus on a narrow problem, or distribute complex r
             (:name "prompt" :type string :description "The detailed instructions and objective for the sub-agent.")
             (:name "tools"
              :type array
-             :description "The subset of your active tools to delegate to this sub-agent (e.g., [\"fd\", \"rg\", \"cat\"]). You can only delegate tools that are currently active in your own session."
+             :description "The subset of your tools to delegate to this sub-agent (e.g., [\"fd\", \"rg\", \"cat\"]). You can only delegate tools that are currently active in your own session."
              :items (:type string))))
     (:name "todo_write"
      :function my/gptel-write-todo
      :category "agent"
-     :description "Display a formatted task list/todo list in the buffer. Use this to track plan execution progress.
-Completed items are displayed with strikethrough and shadow face. Exactly one item should have status \"in_progress\"."
+     :description "Display a task list/todo list in the buffer. Use this to track plan execution progress. Exactly one item should have status \"in_progress\"."
      :confirm nil
      :args ((:name "todos"
              :type array
