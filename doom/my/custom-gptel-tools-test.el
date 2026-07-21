@@ -185,3 +185,39 @@
       (should (equal (plist-get captured-preset-spec :tools) '("fd" "rg")))
       (should (equal (plist-get captured-preset-spec :model) "parent-model-name"))
       (should (equal (plist-get captured-preset-spec :backend) "parent-backend-obj")))))
+
+(ert-deftest test-ast-grep-tool-args ()
+  "Verify that my/ast-grep-tool constructs command-line arguments correctly."
+  (let ((captured-command nil))
+    (cl-letf* (((symbol-function 'executable-find) (lambda (bin) (if (equal bin "ast-grep") "/usr/local/bin/ast-grep" nil)))
+               ((symbol-function 'my--path-allowed-p) (lambda (_path) t))
+               ((symbol-function 'my/get-resolved-skill-dirs) (lambda () nil))
+               ((symbol-function 'my--async-exec)
+                (lambda (_name command callback &rest _args)
+                  (setq captured-command command)
+                  (funcall callback 0 "success-output"))))
+      
+      ;; 1. Run 'run' command
+      (my/ast-grep-tool (lambda (out) (should (equal out "success-output")))
+                        "run" "." "pattern-to-match" "typescript")
+      ;; Captured command contains ast-grep arguments
+      (should (member "ast-grep" captured-command))
+      (should (member "run" captured-command))
+      (should (member "--pattern" captured-command))
+      (should (member "pattern-to-match" captured-command))
+      (should (member "--lang" captured-command))
+      (should (member "typescript" captured-command))
+      
+      ;; 2. Run 'scan' command
+      (my/ast-grep-tool (lambda (out) (should (equal out "success-output")))
+                        "scan" "." nil nil "inline-yaml-rules")
+      (should (member "scan" captured-command))
+      (should (member "--inline-rules" captured-command))
+      (should (member "inline-yaml-rules" captured-command))
+
+      ;; 3. Run 'outline' command
+      (my/ast-grep-tool (lambda (out) (should (equal out "success-output")))
+                        "outline" "." "outline-filter")
+      (should (member "outline" captured-command))
+      (should (member "--match" captured-command))
+      (should (member "outline-filter" captured-command)))))

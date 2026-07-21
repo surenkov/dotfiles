@@ -37,9 +37,12 @@ Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
     (if my/custom-gptel-sandbox-profile-path
         (let* ((root (expand-file-name (doom-project-root)))
                (home (expand-file-name "~"))
+               (ast-grep-bin (executable-find "ast-grep"))
+               (ast-grep-dir (and ast-grep-bin (file-name-directory ast-grep-bin)))
                (whitelist (mapcar (lambda (d) (expand-file-name d root))
                                   (append my/custom-gptel-tools-whitelist-directories
-                                          (my/get-resolved-skill-dirs))))
+                                          (my/get-resolved-skill-dirs)
+                                          (and ast-grep-dir (list ast-grep-dir)))))
                (whitelist-str (mapconcat #'identity whitelist ":")))
           (append (list sandbox-exec
                         "-f" my/custom-gptel-sandbox-profile-path
@@ -409,6 +412,61 @@ MAX-RESULTS is the maximum number of matches to return."
                                                (or (plist-get (cdr (cdr s)) :description)
                                                    "(no description)")))
                            skills "\n"))))))
+
+(defun my/ast-grep-tool (callback command &optional path pattern language inline-rules extra-args)
+  "Run ast-grep with the specified COMMAND and arguments asynchronously.
+CALLBACK is called with the result string.
+COMMAND is 'run', 'scan', or 'outline'.
+PATH is the relative target path (defaults to project root).
+PATTERN is the pattern string to match.
+LANGUAGE is the language of the codebase.
+INLINE-RULES is the inline YAML rules configuration for 'scan'.
+EXTRA-ARGS is an optional list of extra string flags."
+  (let* ((ast-grep-bin (executable-find "ast-grep")))
+    (if (not ast-grep-bin)
+        (funcall callback "Error: 'ast-grep' CLI tool is not installed or not found on PATH.")
+      (let* ((root (doom-project-root))
+             (target-path (expand-file-name (or path ".") root))
+             (rel-target (file-relative-name target-path root)))
+        (cond
+         ((not (my--path-allowed-p target-path))
+          (funcall callback (format "Error: Access denied. '%s' is outside allowed directories." rel-target)))
+         (t
+          (let* ((cmd-args (list "ast-grep" command))
+                 ;; Formulate parameters based on command
+                 (cmd-args
+                  (pcase command
+                    ("run"
+                     (append cmd-args
+                             (when (and pattern (not (string-empty-p pattern)))
+                               (list "--pattern" pattern))
+                             (when (and language (not (string-empty-p language)))
+                               (list "--lang" language))
+                             (list rel-target)))
+                    ("scan"
+                     (append cmd-args
+                             (when (and inline-rules (not (string-empty-p inline-rules)))
+                               (list "--inline-rules" inline-rules))
+                             (list rel-target)))
+                    ("outline"
+                     (append cmd-args
+                             (when (and pattern (not (string-empty-p pattern)))
+                               (list "--match" pattern))
+                             (list rel-target)))
+                    (_ (append cmd-args (list rel-target)))))
+                 ;; Append extra-args if any
+                 (cmd-args (append cmd-args (and extra-args (append extra-args nil)))))
+            (my--async-exec
+             "gptel-ast-grep"
+             (my--wrap-sandbox-command cmd-args)
+             (lambda (code out)
+               (cond
+                ((not (zerop code))
+                 (funcall callback (format "ast-grep failed (exit code %d):\n%s" code out)))
+                ((string-empty-p out)
+                 (funcall callback "No matches/structure found."))
+                (t
+                 (funcall callback out))))))))))))
  
 (defconst my/gptel-custom-tools
   '((:name "skill"
@@ -416,6 +474,17 @@ MAX-RESULTS is the maximum number of matches to return."
      :category "agent"
      :description "Retrieve detailed instructions and guidelines for a specific development methodology skill."
      :args ((:name "name" :type string :description "The name of the skill to retrieve instructions for.")))
+    (:name "ast-grep"
+     :function my/ast-grep-tool
+     :category "filesystem"
+     :description "Search, scan, or outline codebase structure using ast-grep. Requires ast-grep CLI tool."
+     :async t
+     :args ((:name "command" :type string :description "The ast-grep subcommand to run: 'run' (for pattern-based search), 'scan' (for rule-based scanning), or 'outline' (for structural code maps)." :enum ["run" "scan" "outline"])
+            (:name "path" :type string :description "Path relative to the project root to perform the search or outline. Defaults to project root '.'." :optional t)
+            (:name "pattern" :type string :description "The ast-grep query pattern to search for (e.g. 'console.log($ARG)'). Used with 'run' or for filtering in 'outline'." :optional t)
+            (:name "language" :type string :description "The language of the code to search (e.g. 'python', 'go', 'rust', 'typescript'). Used with 'run'." :optional t)
+            (:name "inline-rules" :type string :description "An inline YAML rule string for complex structural queries. Used with 'scan'." :optional t)
+            (:name "extra-args" :type array :description "Optional list of extra command-line arguments to pass directly to the subcommand (e.g. [\"--items\", \"exports\", \"--view\", \"expanded\"] for outline)." :items (:type string) :optional t)))
     (:name "fd"
      :function my/fd-tool
      :category "filesystem"
