@@ -127,12 +127,17 @@
 
 (defun my/gptel-agent--task (main-cb description prompt delegated-tools)
   "Spawn a dynamic, derivative sub-agent."
-  (let* ((parent-tool-names (mapcar #'gptel-tool-name gptel-tools))
+  (let* ((info (gptel-fsm-info gptel--fsm-last))
+         (parent-buf (plist-get info :buffer))
+         (parent-tools (or (plist-get info :tools)
+                           (if (buffer-live-p parent-buf)
+                               (with-current-buffer parent-buf gptel-tools)
+                             gptel-tools)))
+         (parent-tool-names (mapcar #'gptel-tool-name parent-tools))
          (requested-tools (append delegated-tools nil))
          (validated-tools (delete "agent" requested-tools))
          (invalid-tools (cl-remove-if (lambda (tname) (member tname parent-tool-names))
                                       validated-tools))
-         (info (gptel-fsm-info gptel--fsm-last))
          (where (or (plist-get info :tracking-marker)
                     (plist-get info :position)
                     (point)))
@@ -148,9 +153,17 @@
                prompt "\n\n"
                "You must only use the tools explicitly provided to you. "
                "When your task is complete, summarize your findings or provide your final result."))
-             (parent-confirm gptel-confirm-tool-calls)
-             (parent-model gptel-model)
-             (parent-backend gptel-backend)
+             (parent-confirm (if (buffer-live-p parent-buf)
+                                 (with-current-buffer parent-buf gptel-confirm-tool-calls)
+                               gptel-confirm-tool-calls))
+             (parent-model (or (plist-get info :model)
+                               (if (buffer-live-p parent-buf)
+                                   (with-current-buffer parent-buf gptel-model)
+                                 gptel-model)))
+             (parent-backend (or (plist-get info :backend)
+                                 (if (buffer-live-p parent-buf)
+                                     (with-current-buffer parent-buf gptel-backend)
+                                   gptel-backend)))
              (preset-spec (list :system system-prompt
                                 :tools validated-tools
                                 :model parent-model

@@ -233,7 +233,8 @@
     (setq gptel-prompts-directory (concat doom-user-dir "prompts/")
           gptel-prompts-template-functions '(gptel-prompts-add-current-time
                                              gptel-prompts-current-project-variables
-                                             gptel-prompts-project-agents-instructions))
+                                             gptel-prompts-project-agents-instructions
+                                             gptel-prompts-buffer-mode-variables))
     (add-hook 'gptel-prompts-prepare-template-env-functions #'gptel-prompts-add-filters)
     (gptel-prompts-update))
 
@@ -255,6 +256,14 @@
     :system (alist-get 'build gptel-directives)
     :post (lambda () (setq gptel-confirm-tool-calls nil))
     :tools '("fd" "fzf" "rg" "cat" "bash" "edit" "read_url" "skills" "agent" "todo_write"))
+  (gptel-make-preset 'compaction
+    :description "Compact chat history into a dense summary"
+    :parents 'default
+    :system (alist-get 'compaction gptel-directives)
+    :rewrite-directive (alist-get 'compaction gptel-directives)
+    :use-tools nil
+    :include-reasoning nil
+    :org-branching-context nil)
 
   ;; DEFINE: Config
 

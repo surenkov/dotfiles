@@ -27,6 +27,9 @@ Paths can be absolute or relative to the project root.")
   (expand-file-name "my/skills" (if (boundp 'doom-user-dir) doom-user-dir "~/.config/doom/"))
   "Path to the directory containing methodology skills.")
 
+(defvar my/custom-gptel-tool-output-limit (* 100 1024)
+  "Maximum output size in bytes for `bash` tool commands before truncation and caching.")
+
 (defun my--wrap-sandbox-command (command-args)
   "Wrap COMMAND-ARGS in `sandbox-exec` if the profile exists and we are local.
 Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
@@ -48,35 +51,65 @@ Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
       command-args)))
 
 (defun my--path-allowed-p (path)
-  "Return non-nil if PATH is within allowed directories.
+  "Return non-nil if PATH is within allowed directories or is a valid gptel bash temp file.
 Resolves symlinks before checking."
   (let* ((root (file-truename (expand-file-name (doom-project-root))))
          (full-path (file-truename (expand-file-name path root)))
+         (temp-prefix (file-truename (expand-file-name (concat (file-name-as-directory (file-truename temporary-file-directory)) "gptel-bash-output-"))))
          (allowed-dirs (cons root (mapcar (lambda (d) (file-truename (expand-file-name d root)))
                                           (append my/custom-gptel-tools-whitelist-directories
                                                   (my/get-resolved-skill-dirs))))))
-    (cl-some (lambda (dir)
-               (let ((dir-abs (file-name-as-directory dir)))
-                 (string-prefix-p dir-abs (file-name-as-directory full-path))))
-             allowed-dirs)))
+    (or (string-prefix-p temp-prefix full-path)
+        (cl-some (lambda (dir)
+                   (let ((dir-abs (file-name-as-directory dir)))
+                     (string-prefix-p dir-abs (file-name-as-directory full-path))))
+                 allowed-dirs))))
 
 (defun my--truncate-output (text &optional max-lines)
-  "Truncate TEXT to MAX-LINES (default 200).
-If TEXT exceeds MAX-LINES, return first and last portions with message."
+  "Truncate TEXT to MAX-LINES or `my/custom-gptel-tool-output-limit`.
+If MAX-LINES is negative, bypass truncation and return TEXT unchanged.
+If TEXT exceeds either limit, write full text to a secure temporary file."
   (if (or (not text) (string-empty-p text))
       ""
     (let* ((max-lines (or max-lines 200))
-           (lines (split-string text "\n"))
-           (len (length lines)))
-      (if (<= len max-lines)
+           (bytes (string-bytes text)))
+      (if (and (integerp max-lines) (< max-lines 0))
           text
-        (let* ((keep (or (/ max-lines 2) 100))
-               (first-part (cl-subseq lines 0 keep))
-               (last-part (cl-subseq lines (- len keep) len))
-               (msg (format "\n\n[... Truncated %d lines from middle ...]\n\n" (- len (* keep 2)))))
-          (concat (mapconcat #'identity first-part "\n")
-                  msg
-                  (mapconcat #'identity last-part "\n")))))))
+        (with-temp-buffer
+          (insert text)
+          (let ((len (count-lines (point-min) (point-max))))
+            (if (and (<= len max-lines)
+                     (<= bytes my/custom-gptel-tool-output-limit))
+                text
+              (let* ((temp-file (make-temp-file "gptel-bash-output-"))
+                     (keep (max 1 (or (/ max-lines 2) 100)))
+                     (first-part-raw
+                      (progn
+                        (goto-char (point-min))
+                        (forward-line keep)
+                        (buffer-substring-no-properties (point-min) (point))))
+                     (last-part-raw
+                      (progn
+                        (goto-char (point-max))
+                        (forward-line (- keep))
+                        (buffer-substring-no-properties (point) (point-max))))
+                     (half-limit (/ my/custom-gptel-tool-output-limit 2))
+                     (head-part (if (> (string-bytes first-part-raw) half-limit)
+                                    (substring first-part-raw 0 (min (length first-part-raw) half-limit))
+                                  first-part-raw))
+                     (tail-part (if (> (string-bytes last-part-raw) half-limit)
+                                    (substring last-part-raw (max 0 (- (length last-part-raw) half-limit)) (length last-part-raw))
+                                  last-part-raw))
+                     (truncated-bytes (- bytes (string-bytes head-part) (string-bytes tail-part)))
+                     (formatted-msg (format "[... Truncated %d bytes/lines from middle. Total size: %.2f KB, total lines: %d ...]\n%s\n...\n%s\n[... Full output saved to temporary file: %s ...]\nYou can read the complete output by invoking the `cat` tool on the path above if needed."
+                                             truncated-bytes
+                                             (/ bytes 1024.0)
+                                             len
+                                             head-part
+                                             tail-part
+                                             temp-file)))
+                (write-region (point-min) (point-max) temp-file nil 'no-message)
+                formatted-msg))))))))
 
 (defun my--get-diagnostics-for-file (path)
   "Retrieve active diagnostics/errors for the file at PATH.
@@ -110,10 +143,11 @@ Checks Flycheck, Flymake, and LSP (Eglot or lsp-mode) if available."
           (when diags
             (mapconcat #'identity (nreverse diags) "\n")))))))
 
-(defun my--async-exec (name command callback &optional input)
+(defun my--async-exec (name command callback &optional input max-lines)
   "Generic helper to run a process asynchronously.
 NAME is the process name, COMMAND is the list of args,
-CALLBACK is called with (exit-code output), and optional INPUT is sent to stdin."
+CALLBACK is called with (exit-code output), optional INPUT is sent to stdin,
+and MAX-LINES specifies truncation limits."
   (let* ((default-directory (doom-project-root))
          (output-buffer (generate-new-buffer (format "*%s*" name)))
          (proc (make-process
@@ -129,7 +163,7 @@ CALLBACK is called with (exit-code output), and optional INPUT is sent to stdin.
                                     (string-trim (buffer-string)))))
                       (kill-buffer output-buffer)
                       ;; Truncate output to avoid overloading model context (default 300 lines)
-                      (funcall callback exit-code (my--truncate-output output 300))))))))
+                      (funcall callback exit-code (my--truncate-output output (or max-lines 300)))))))))
     (when input
       (process-send-string proc input))
     (process-send-eof proc) ;; Close stdin to prevent hanging
@@ -302,7 +336,8 @@ MAX-RESULTS is the maximum number of matches to return."
                                             out
                                             (mapconcat #'identity (nreverse diag-reports) "\n\n")))
                 (funcall callback out)))))))
-     patch-content)))
+     patch-content
+     -1)))
 
 (defun my/shell-tool (callback command)
   "Run COMMAND in a shell and call CALLBACK with the result."
@@ -311,9 +346,9 @@ MAX-RESULTS is the maximum number of matches to return."
    (my--wrap-sandbox-command
     (list shell-file-name shell-command-switch command))
    (lambda (code out)
-     (funcall callback (if (zerop code)
-                           out
-                         (format "Command failed (exit code %d):\n%s" code out))))))
+     (if (not (zerop code))
+         (funcall callback (format "Command failed (exit code %d):\n%s" code out))
+       (funcall callback out)))))
 
 (defvar my/read-url-timeout 10
   "Timeout in seconds for `my/read-url-tool`.")

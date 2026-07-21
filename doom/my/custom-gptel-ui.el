@@ -188,7 +188,7 @@ TODOS is a list/vector of plists with keys :content, :activeForm, and :status."
                          return (plist-get todo :activeForm)))
                (todo-display
                 (concat
-                 (unless (= (char-before (overlay-end todo-ov)) 10) "\n")
+                 "\n"
                  my/gptel-agent--hrule
                  (propertize "Task list: [ "
                              'face '(:inherit font-lock-comment-face :inherit bold))
@@ -217,6 +217,16 @@ TODOS is a list/vector of plists with keys :content, :activeForm, and :status."
         '(my/gptel-agent-preview-setup))
   (setf (alist-get "edit" gptel--tool-preview-alist nil nil #'string-equal)
         '(my/gptel-edit-preview-setup)))
+
+(defun gptel-prompts-buffer-mode-variables (_file)
+  "Expose current buffer's mode and stripped syntax name for templating."
+  (let* ((mode-sym major-mode)
+         (mode-str (and mode-sym (fboundp 'gptel--strip-mode-suffix)
+                        (gptel--strip-mode-suffix mode-sym))))
+    `(("major_mode" . ,(symbol-name mode-sym))
+      ("mode_syntax" . ,(or mode-str ""))
+      ("is_org_mode" . ,(eq mode-sym 'org-mode))
+      ("is_markdown_mode" . ,(eq mode-sym 'markdown-mode)))))
 
 (provide 'custom-gptel-ui)
 ;;; custom-gptel-ui.el ends here
