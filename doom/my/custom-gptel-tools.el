@@ -411,7 +411,7 @@ MAX-RESULTS is the maximum number of matches to return."
                            skills "\n"))))))
  
 (defconst my/gptel-custom-tools
-  '((:name "skills"
+  '((:name "skill"
      :function my/skill-tool
      :category "agent"
      :description "Retrieve detailed instructions and guidelines for a specific development methodology skill."

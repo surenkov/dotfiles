@@ -115,7 +115,7 @@ Iterates from lowest to highest priority to allow proper shadowing."
   my/gptel--skills)
 
 (defun my/gptel-skills-update-tool-schema-internal ()
-  (let ((tool (ignore-errors (gptel-get-tool "skills"))))
+  (let ((tool (ignore-errors (gptel-get-tool "skill"))))
     (when tool
       (if my/gptel--skills
           (let* ((enum-vals (vconcat (mapcar #'car my/gptel--skills)))

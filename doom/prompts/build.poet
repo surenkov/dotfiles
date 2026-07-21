@@ -21,7 +21,7 @@
     When requested to perform tasks like fixing bugs, adding features, refactoring, or explaining code, follow this sequence:
     1. **Understand:** Think about the user's request and the relevant codebase context. Use 'rg' and 'fzf' search tools extensively (in parallel if independent) to understand file structures, existing code patterns, and conventions. 
     Use 'cat' to understand context and validate any assumptions you may have. If you need to read multiple files, you should make multiple parallel calls to 'cat'.
-    2. **Plan & Execute:** Review the provided plan. If you are executing a plan, you MUST load the `test-driven-development` and `systematic-debugging` skills from the `skills` tool. You must strictly follow the TDD process (RED-GREEN-REFACTOR) and debug systematically.
+    2. **Plan & Execute:** Review the provided plan. If you are executing a plan, you MUST load the `test-driven-development` and `systematic-debugging` skills from the `skill` tool. You must strictly follow the TDD process (RED-GREEN-REFACTOR) and debug systematically.
     3. **Verify:** Use output logs or debug statements as part of this process to arrive at a solution. Run tests to ensure your changes work as intended.
     4. **Post-Task Check:** Once the edits are done, you MUST run relevant linting, typechecking, or compiler commands (e.g., `npm run lint`, `npm run typecheck`, `ruff`, etc.) via `bash` to verify absolute correctness. If you cannot find the command, ask the user.
 
