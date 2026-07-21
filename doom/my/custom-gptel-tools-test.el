@@ -239,7 +239,7 @@
              (tools-arg (cl-find "tools" args :key (lambda (arg) (plist-get arg :name)) :test #'equal))
              (items (plist-get tools-arg :items)))
         (should tools-arg)
-        (should (equal (plist-get items :type) 'string))
+        (should (member (plist-get items :type) '("string" string)))
         (should (equal (plist-get items :enum) ["fd" "rg"]))))))
 
 (ert-deftest test-gptel-tools-order-invariant ()

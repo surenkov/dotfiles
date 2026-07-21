@@ -1,71 +1,48 @@
-# Condition-Based Waiting
+# Condition-Based Waiting (High-Density)
 
-## Overview
+## Overview & Rules
+* **Core Principle:** Wait for the actual condition of interest, not a guessed duration.
+* **When to Use:** Flaky tests, tests using `setTimeout`/`sleep`, parallel run timeouts, and asynchronous transitions.
+* **When NOT to Use:** Testing deliberate timing/throttling/debounce behavior. (If used, document the mathematical justification).
 
-Flaky tests often guess at timing with arbitrary delays. This creates race conditions where tests pass on fast machines but fail under load or in CI.
+---
 
-**Core principle:** Wait for the actual condition you care about, not a guess about how long it takes.
-
-## When to Use
-
-```dot
-digraph when_to_use {
-    "Test uses setTimeout/sleep?" [shape=diamond];
-    "Testing timing behavior?" [shape=diamond];
-    "Document WHY timeout needed" [shape=box];
-    "Use condition-based waiting" [shape=box];
-
-    "Test uses setTimeout/sleep?" -> "Testing timing behavior?" [label="yes"];
-    "Testing timing behavior?" -> "Document WHY timeout needed" [label="yes"];
-    "Testing timing behavior?" -> "Use condition-based waiting" [label="no"];
-}
-```
-
-**Use when:**
-- Tests have arbitrary delays (`setTimeout`, `sleep`, `time.sleep()`)
-- Tests are flaky (pass sometimes, fail under load)
-- Tests timeout when run in parallel
-- Waiting for async operations to complete
-
-**Don't use when:**
-- Testing actual timing behavior (debounce, throttle intervals)
-- Always document WHY if using arbitrary timeout
-
-## Core Pattern
+## Core Code Pattern
 
 ```typescript
-// ❌ BEFORE: Guessing at timing
+// ❌ BEFORE (Guessing):
 await new Promise(r => setTimeout(r, 50));
-const result = getResult();
-expect(result).toBeDefined();
+expect(getResult()).toBeDefined();
 
-// ✅ AFTER: Waiting for condition
-await waitFor(() => getResult() !== undefined);
-const result = getResult();
-expect(result).toBeDefined();
+// ✅ AFTER (Polling):
+await waitFor(() => getResult() !== undefined, "result population");
+expect(getResult()).toBeDefined();
 ```
 
-## Quick Patterns
+---
 
-| Scenario | Pattern |
-|----------|---------|
-| Wait for event | `waitFor(() => events.find(e => e.type === 'DONE'))` |
-| Wait for state | `waitFor(() => machine.state === 'ready')` |
-| Wait for count | `waitFor(() => items.length >= 5)` |
-| Wait for file | `waitFor(() => fs.existsSync(path))` |
-| Complex condition | `waitFor(() => obj.ready && obj.value > 10)` |
+## Quick Reference Patterns
 
-## Implementation
+| Target | Pattern |
+| :--- | :--- |
+| **Event** | `waitFor(() => events.find(e => e.type === 'DONE'), "DONE event")` |
+| **State** | `waitFor(() => machine.state === 'ready', "state ready")` |
+| **Count** | `waitFor(() => items.length >= 5, "items count >= 5")` |
+| **File** | `waitFor(() => fs.existsSync(path), "file creation")` |
+| **Complex** | `waitFor(() => obj.ready && obj.value > 10, "object initialization & threshold")` |
 
-Generic polling function:
+---
+
+## Standard Polling Implementation
+
 ```typescript
 async function waitFor<T>(
   condition: () => T | undefined | null | false,
   description: string,
-  timeoutMs = 5000
+  timeoutMs = 5000,
+  pollIntervalMs = 10
 ): Promise<T> {
   const startTime = Date.now();
-
   while (true) {
     const result = condition();
     if (result) return result;
@@ -73,43 +50,27 @@ async function waitFor<T>(
     if (Date.now() - startTime > timeoutMs) {
       throw new Error(`Timeout waiting for ${description} after ${timeoutMs}ms`);
     }
-
-    await new Promise(r => setTimeout(r, 10)); // Poll every 10ms
+    await new Promise(r => setTimeout(r, pollIntervalMs));
   }
 }
 ```
 
-See `condition-based-waiting-example.ts` in this directory for complete implementation with domain-specific helpers (`waitForEvent`, `waitForEventCount`, `waitForEventMatch`) from actual debugging session.
+---
 
-## Common Mistakes
+## Anti-Patterns & Corrective Actions
+* **Polling too fast:** Avoid intervals under 10ms (e.g., `setTimeout(check, 1)`) to prevent high CPU utilization.
+* **Infinite Loops:** Always define an explicit timeout parameter with an informative error message.
+* **Stale State:** Avoid passing pre-resolved variables to the condition callback. Ensure the callback executes fresh getters/queries each iteration.
 
-**❌ Polling too fast:** `setTimeout(check, 1)` - wastes CPU
-**✅ Fix:** Poll every 10ms
+---
 
-**❌ No timeout:** Loop forever if condition never met
-**✅ Fix:** Always include timeout with clear error
-
-**❌ Stale data:** Cache state before loop
-**✅ Fix:** Call getter inside loop for fresh data
-
-## When Arbitrary Timeout IS Correct
+## Justified Arbitrary Timeouts
+Arbitrary delays are valid *only* when testing timing behaviors (e.g. throttle, debounce) and must adhere to this sequence:
+1. Wait for the triggering condition using `waitFor`.
+2. Sleep for the defined behavior interval.
+3. Add a code comment mathematically justifying the duration.
 
 ```typescript
-// Tool ticks every 100ms - need 2 ticks to verify partial output
-await waitForEvent(manager, 'TOOL_STARTED'); // First: wait for condition
-await new Promise(r => setTimeout(r, 200));   // Then: wait for timed behavior
-// 200ms = 2 ticks at 100ms intervals - documented and justified
+await waitForEvent(manager, 'TOOL_STARTED'); // 1. Condition
+await new Promise(r => setTimeout(r, 200));   // 2. 2 ticks at 100ms interval (Justified)
 ```
-
-**Requirements:**
-1. First wait for triggering condition
-2. Based on known timing (not guessing)
-3. Comment explaining WHY
-
-## Real-World Impact
-
-From debugging session (2025-10-03):
-- Fixed 15 flaky tests across 3 files
-- Pass rate: 60% → 100%
-- Execution time: 40% faster
-- No more race conditions
