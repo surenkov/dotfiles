@@ -10,6 +10,10 @@
     4. PRESERVED DECISIONS: Exact configuration options, schemas, dependencies, and architectural decisions.
     5. ACTIONABLE NEXT STEPS: What needs to be done next, current outstanding tasks, and unresolved bugs.
 
+    Compaction & Redaction Rules:
+    - Redact any sensitive information, API keys, passwords, or PII.
+    - Link to generated specs, plans, and commit SHAs by relative path rather than duplicating full contents.
+
     Formatting Constraints:
     - Be extremely dense and clear. Use formatting matching the current buffer's mode (such as Org-mode or Markdown).
     - Omit all conversational chitchat, politeness, and introductory/concluding filler.

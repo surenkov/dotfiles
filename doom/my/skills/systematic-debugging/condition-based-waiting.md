@@ -1,11 +1,9 @@
-# Condition-Based Waiting (High-Density)
+# Condition-Based Waiting
 
 ## Overview & Rules
 * **Core Principle:** Wait for the actual condition of interest, not a guessed duration.
 * **When to Use:** Flaky tests, tests using `setTimeout`/`sleep`, parallel run timeouts, and asynchronous transitions.
 * **When NOT to Use:** Testing deliberate timing/throttling/debounce behavior. (If used, document the mathematical justification).
-
----
 
 ## Core Code Pattern
 
@@ -19,8 +17,6 @@ await waitFor(() => getResult() !== undefined, "result population");
 expect(getResult()).toBeDefined();
 ```
 
----
-
 ## Quick Reference Patterns
 
 | Target | Pattern |
@@ -30,8 +26,6 @@ expect(getResult()).toBeDefined();
 | **Count** | `waitFor(() => items.length >= 5, "items count >= 5")` |
 | **File** | `waitFor(() => fs.existsSync(path), "file creation")` |
 | **Complex** | `waitFor(() => obj.ready && obj.value > 10, "object initialization & threshold")` |
-
----
 
 ## Standard Polling Implementation
 
@@ -55,14 +49,10 @@ async function waitFor<T>(
 }
 ```
 
----
-
 ## Anti-Patterns & Corrective Actions
 * **Polling too fast:** Avoid intervals under 10ms (e.g., `setTimeout(check, 1)`) to prevent high CPU utilization.
 * **Infinite Loops:** Always define an explicit timeout parameter with an informative error message.
 * **Stale State:** Avoid passing pre-resolved variables to the condition callback. Ensure the callback executes fresh getters/queries each iteration.
-
----
 
 ## Justified Arbitrary Timeouts
 Arbitrary delays are valid *only* when testing timing behaviors (e.g. throttle, debounce) and must adhere to this sequence:

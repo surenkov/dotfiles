@@ -15,23 +15,12 @@ When you have multiple unrelated failures (different test files, different subsy
 
 ## When to Use
 
-```dot
-digraph when_to_use {
-    "Multiple failures?" [shape=diamond];
-    "Are they independent?" [shape=diamond];
-    "Single agent investigates all" [shape=box];
-    "One agent per problem domain" [shape=box];
-    "Can they work in parallel?" [shape=diamond];
-    "Sequential agents" [shape=box];
-    "Parallel dispatch" [shape=box];
-
-    "Multiple failures?" -> "Are they independent?" [label="yes"];
-    "Are they independent?" -> "Single agent investigates all" [label="no - related"];
-    "Are they independent?" -> "Can they work in parallel?" [label="yes"];
-    "Can they work in parallel?" -> "Parallel dispatch" [label="yes"];
-    "Can they work in parallel?" -> "Sequential agents" [label="no - shared state"];
-}
-```
+**Decision Logic:**
+- Multiple failures -> Are they independent?
+  - **No (related):** Use a single agent to investigate together.
+  - **Yes:** Can they work without shared state?
+    - **Yes:** Parallel dispatch (one agent per domain).
+    - **No:** Sequential agents.
 
 **Use when:**
 - 3+ test files failing with different root causes
@@ -109,6 +98,37 @@ Do NOT just increase timeouts - find the real issue.
 Return: Summary of what you found and what you fixed.
 ```
 
+## Background Research & Fact-Finding Archetype
+
+When faced with unfamiliar APIs, third-party library specs, complex documentation, or deep codebase inquiries, delegate the research to an isolated sub-agent.
+
+### Core Mandate
+* **Primary-Source Focus:** Instruct the sub-agent to read primary sources (official docs, library type definitions, repository implementation files) rather than relying on training assumptions or secondary summaries.
+* **Context Preservation:** Keeps your primary agent context clean and focused on coordination and synthesis.
+
+### Prompt Template
+
+```markdown
+Conduct background research on: [Topic/API/Subsystem]
+
+Target Primary Sources:
+- Official documentation / specifications: [URLs / File Paths]
+- Relevant code files: [Paths]
+
+Your Task:
+1. Thoroughly read and analyze the primary-source materials.
+2. Investigate specific technical questions:
+   - [Question 1]
+   - [Question 2]
+
+Report Requirements:
+- Include direct citations and code snippets from primary sources for every finding.
+- Provide clear, evidence-backed conclusions and recommendations for implementation.
+- Do NOT modify production code; only produce the research report.
+
+Return: Confirmation of the written report path and a high-level 3-bullet summary.
+```
+
 ## Common Mistakes
 
 **❌ Too broad:** "Fix all the tests" - agent gets lost
@@ -132,37 +152,14 @@ Return: Summary of what you found and what you fixed.
 
 ## Real Example from Session
 
-**Scenario:** 6 test failures across 3 files after major refactoring
-
-**Failures:**
-- agent-tool-abort.test.ts: 3 failures (timing issues)
-- batch-completion-behavior.test.ts: 2 failures (tools not executing)
-- tool-approval-race-conditions.test.ts: 1 failure (execution count = 0)
-
-**Decision:** Independent domains - abort logic separate from batch completion separate from race conditions
-
-**Dispatch:**
-```
-Agent 1 → Fix agent-tool-abort.test.ts
-Agent 2 → Fix batch-completion-behavior.test.ts
-Agent 3 → Fix tool-approval-race-conditions.test.ts
-```
-
-**Results:**
-- Agent 1: Replaced timeouts with event-based waiting
-- Agent 2: Fixed event structure bug (threadId in wrong place)
-- Agent 3: Added wait for async tool execution to complete
-
-**Integration:** All fixes independent, no conflicts, full suite green
-
-**Time saved:** 3 problems solved in parallel vs sequentially
+* 6 failures across 3 test files (`agent-tool-abort.test.ts`, `batch-completion-behavior.test.ts`, `tool-approval-race-conditions.test.ts`).
+* Dispatched 3 parallel agents (1 per test file).
+* All investigated concurrently, fixed root causes independently, and integrated without state conflicts.
 
 ## Key Benefits
 
-1. **Parallelization** - Multiple investigations happen simultaneously
-2. **Focus** - Each agent has narrow scope, less context to track
-3. **Independence** - Agents don't interfere with each other
-4. **Speed** - 3 problems solved in time of 1
+* **Parallelization & Speed:** Concurrent investigations eliminate sequential bottlenecks.
+* **Context Isolation:** Narrow scope prevents context contamination across problem domains.
 
 ## Verification
 
@@ -172,11 +169,3 @@ After agents return:
 3. **Run full suite** - Verify all fixes work together
 4. **Spot check** - Agents can make systematic errors
 
-## Real-World Impact
-
-From debugging session (2025-10-03):
-- 6 failures across 3 files
-- 3 agents dispatched in parallel
-- All investigations completed concurrently
-- All fixes integrated successfully
-- Zero conflicts between agent changes

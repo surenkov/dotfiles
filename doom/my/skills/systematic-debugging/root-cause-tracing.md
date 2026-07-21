@@ -1,28 +1,16 @@
-# Root Cause Tracing (High-Density)
+# Root Cause Tracing
 
 ## Core Principle
 * **Rule:** Never patch where a symptom manifests. Trace backward through the call chain to the original trigger and resolve it at the source.
 * **When to Use:** Errors occurring deep within the stack, long call chains, unknown data origin, or test pollution.
 
----
-
 ## Backward Tracing Process
 
-```
-[1. Symptom]           Error: git init failed in packages/core (src folder)
-      ↑
-[2. Immediate Cause]   execFileAsync('git', ['init'], { cwd: projectDir }) 
-      ↑
-[3. Call Chain]        WorktreeManager.createSessionWorktree(projectDir)
-                       ↳ Session.initializeWorkspace() ↳ Session.create()
-      ↑
-[4. Data Inspection]   projectDir is passed as "" (empty string), defaulting to process.cwd()
-      ↑
-[5. Original Trigger]  setupCoreTest() returned { tempDir: "" } because it was 
-                       evaluated at module load, prior to beforeEach setup.
-```
-
----
+1. **Symptom:** Error: `git init` failed in `packages/core` (`src` folder).
+2. **Immediate Cause:** `execFileAsync('git', ['init'], { cwd: projectDir })`.
+3. **Call Chain:** `WorktreeManager.createSessionWorktree(projectDir)` → `Session.initializeWorkspace()` → `Session.create()`.
+4. **Data Inspection:** `projectDir` passed as `""` (empty string), defaulting to `process.cwd()`.
+5. **Original Trigger:** `setupCoreTest()` returned `{ tempDir: "" }` because evaluated at module load, prior to `beforeEach` setup.
 
 ## Diagnostic Instrumentation
 
@@ -46,8 +34,6 @@ async function gitInit(directory: string) {
 * **Run & Filter:** Isolate logs by piping output: `npm test 2>&1 | grep 'DIAGNOSTIC'`
 * **Pre-empt Errors:** Always log state *before* a failure occurs to capture the environment successfully.
 * **Identify Polluters:** For test-leakage and state pollution issues, execute tests in isolation or use bisection scripts (e.g., `./find-polluter.sh '.git' 'src/**/*.test.ts'`).
-
----
 
 ## Root-Cause-Tracing Workflow
 

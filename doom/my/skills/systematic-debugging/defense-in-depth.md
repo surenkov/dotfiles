@@ -1,10 +1,8 @@
-# Defense-in-Depth Validation (High-Density)
+# Defense-in-Depth Validation
 
 ## Core Concept
 * **Principle:** Validate at **every** architectural layer data passes through. Make bugs structurally impossible.
 * **Rationale:** Single validation checks are routinely bypassed by alternative code paths, mocks in testing, or refactoring.
-
----
 
 ## The Four Validation Layers
 
@@ -51,8 +49,6 @@ async function gitInit(directory: string) {
   });
 }
 ```
-
----
 
 ## Implementation Sequence
 1. **Trace Data Flow:** Map the execution path from bad value origination to the point of failure.

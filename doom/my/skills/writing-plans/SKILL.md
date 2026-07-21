@@ -7,21 +7,18 @@ description: Use when you have a specification or requirements for a multi-step 
 
 Write precise, exhaustive implementation plans assuming the implementer has zero project context but high technical competence. Define everything required: exact files, complete code, precise tests, and exact verification commands. Ensure tasks are bite-sized, independent, and structured around TDD and frequent commits.
 
-**Pre-computation Announcement:** "I'm using the writing-plans skill to create the implementation plan."
+- **Pre-computation Announcement**: `"I'm using the writing-plans skill to create the implementation plan."`
 
-**Plan Location:** Save to `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md` (unless user specifies otherwise).
+## Core Principles
 
-## Planning Core Principles
-
-1. **Scope Division:** If a spec covers multiple independent subsystems, divide it into separate plans (one per subsystem). Each plan must produce working, testable software.
-2. **File Structure Mapping:** List files to be created/modified with their exact responsibilities before detailing tasks. Prioritize small, focused files with single, clear responsibilities.
-3. **Bite-Sized Steps:** Break tasks into 2-5 minute steps (e.g., Write failing test -> Run to verify failure -> Write implementation -> Verify pass -> Commit).
-4. **No Placeholders:** Never use "TODO", "TBD", "implement later", or vague commands like "add error handling". Every code change, test, and command must be fully written out. No "similar to Task N" shortcuts.
+1. **Scope Division**: Divide multi-subsystem specs into separate plans (one per subsystem). Each plan must produce working, testable software.
+2. **File Structure Mapping**: Map files to be created/modified with exact responsibilities before detailing tasks. Require deep modules with clear testable seams rather than shallow pass-through wrappers. Prioritize small, focused files with single, clear responsibilities.
+3. **Bite-Sized Steps**: Break tasks into 2-5 minute steps (Write failing test -> Run to verify failure -> Write implementation -> Verify pass -> Commit).
+4. **No Placeholders**: Never use "TODO", "TBD", "implement later", vague commands ("add error handling"), or "similar to Task N" shortcuts. Every code change, test, and command must be fully written out.
 
 ## Plan File Format
 
 ### Document Header
-Every plan must start with this header:
 
 ```markdown
 * [Feature Name] Implementation Plan
@@ -36,7 +33,6 @@ Every plan must start with this header:
 ```
 
 ### Task Structure
-Detail each task using the following structure:
 
 ```markdown
 *** Task N: [Component Name]
@@ -71,23 +67,18 @@ git commit -m "feat: add specific feature"
 
 ## Self-Review Guidelines
 
-Before saving, perform a self-review:
-- **Spec Coverage:** Ensure every requirement in the specification maps to a task.
-- **No Placeholders:** Search for "TODO", "TBD", or unwritten code blocks.
-- **API Consistency:** Ensure function signatures, types, and variable names are consistent across all tasks.
+- **Spec Coverage**: Every specification requirement maps to a task.
+- **No Placeholders**: Zero "TODO", "TBD", or unwritten code blocks.
+- **API Consistency**: Signatures, types, and variable names consistent across all tasks.
 
 ## Execution Handoff
-Once saved, transition to execution:
+
+Upon plan completion, output:
 ```
-Plan complete and saved to docs/superpowers/plans/<filename>.md.
 Ready to execute using superpowers:subagent-driven-development (fresh subagent per task, two-stage review).
 ```
 
----
-
-## Plan Review Checklist (from plan-document-reviewer-prompt)
-
-When verifying a plan document, use the following criteria:
+## Plan Review Checklist
 
 | Category | What to Verify |
 |---|---|
@@ -96,4 +87,4 @@ When verifying a plan document, use the following criteria:
 | **Task Decomposition** | Verify tasks have clear boundaries and steps are highly actionable. |
 | **Buildability** | Confirm an engineer can execute the plan without needing extra context. |
 
-**Review Calibration:** Approve unless there are blocker-level issues (missing requirements, contradictory steps, placeholders, or vague actions). Ignore minor stylistic choices.
+**Calibration**: Approve unless blocker-level issues exist (missing requirements, contradictory steps, placeholders, vague actions). Ignore minor stylistic choices.

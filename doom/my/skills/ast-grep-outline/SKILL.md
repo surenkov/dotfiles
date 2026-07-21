@@ -3,80 +3,53 @@ name: ast-grep-outline
 description: Use when exploring or modifying a codebase and you need a cheap structural map of files, directories, imports, exports, or direct members before reading full source.
 ---
 
-# Use ast-grep outline
+# ast-grep outline
 
-`ast-grep outline` prints a compact structural map of source code with line
-numbers: top-level **items** (imports, functions, classes, structs,
-interfaces, modules, enums) and their direct **members** (fields, methods,
-constructors, enum variants). It is a local, syntax-only view — cheap enough
-to run before any full file read.
+`ast-grep outline` generates a compact, syntax-only structural map with line numbers for top-level items (imports, functions, classes, structs, interfaces, modules, enums) and direct members (fields, methods, constructors, enum variants).
 
-Read code in stages: find candidate files with search or file names, outline
-them, then open only the source range the outline points to. Defaults adapt to
-input: a file shows its local structure with member digests; a directory shows
-only its exported surface as grouped names.
-
-## When To Use It
-
-**Understand a file before editing.** Get a table of contents, dependencies,
-and public entry points before reading implementation details:
+## Usage Examples
 
 ```shell
+# Local structure of a file (default)
 ast-grep outline <file>
+
+# Filter by item category
 ast-grep outline <file> --items imports
 ast-grep outline <file> --items exports
-```
 
-**Map an unfamiliar directory.** Scan the public surface of a subtree, then
-narrow by symbol type when you know what you are looking for:
-
-```shell
+# Map directory API surface or specific symbol types
 ast-grep outline <dir> --items exports
 ast-grep outline <dir> --type struct,enum,function
-```
 
-**Zoom into a known symbol.** After search finds a likely name, list its
-members with line numbers instead of reading the whole body:
-
-```shell
+# Zoom into a specific symbol with full member details
 ast-grep outline <file> --match <symbol> --type class --view expanded
-```
 
-**Trace dependency direction.** Find which files import a package or module to
-decide where a change belongs:
-
-```shell
+# Dependency mapping across directory
 ast-grep outline <dir> --items imports --view signatures
-```
 
-**Review changed files after editing.** Git tells you what changed; outline
-summarizes the resulting structure and public surface:
-
-```shell
+# Outline git-modified files
 ast-grep outline $(git diff --name-only HEAD) --items exports
 ```
 
-## Argument Guide
+## Command Options
 
-- `--items <KIND>` selects top-level items: `structure` for local declarations
-  (file default), `exports` for public API (directory default), `imports` for
-  dependencies, `all` when import/export edges matter together.
-- `--view <VIEW>` controls detail, from least to most: `names` for directory
-  scans, `signatures` for one line per item, `digest` for signatures plus
-  member names, `expanded` for one line per member with its line number.
-- `--match <REGEX>` filters top-level items by name or signature. Rust regex,
-  case-sensitive; it never matches members.
-- `--type <TYPE[,TYPE...]>` keeps only some top-level symbol types, such as
-  `--type class,function`. Member types like `method,field` never match
-  top-level items.
-- `--pub-members` hides private members when the view prints members.
-- `--json=stream` emits one JSON object per file with precise ranges. Use it
-  only to pipe or post-process entries; prefer text for navigation.
+- `--items <KIND>`: Top-level item category.
+  - `structure`: Local declarations (file default).
+  - `exports`: Public API surface (directory default).
+  - `imports`: Dependency declarations.
+  - `all`: Combines imports, exports, and structure.
+- `--view <VIEW>`: Output detail level.
+  - `names`: Grouped symbol names (directory default).
+  - `signatures`: One line per top-level item.
+  - `digest`: Item signatures plus member names.
+  - `expanded`: One line per member with explicit line numbers.
+- `--match <REGEX>`: Rust regex (case-sensitive) matching top-level item names or signatures. Does not filter members directly.
+- `--type <TYPES>`: Comma-separated top-level symbol types (`class`, `function`, `struct`, `enum`, etc.). Does not match member types (`method`, `field`).
+- `--pub-members`: Hides private members when printing members.
+- `--json=stream`: Streamed JSON output (one object per file) with precise byte/line ranges for programmatic parsing.
 
-## Limits
+## Limitations
 
-`outline` shows local syntax structure. It does not resolve references, infer
-types, follow re-export chains, or build a call graph. Use `ast-grep run`,
-`rg`, or compiler-backed tools for those questions, then outline the candidate
-files they surface.
-````
+- Syntax-only parsing: Does not resolve type references, follow re-exports, or compute call graphs.
+- Use `ast-grep run`, `rg`, or LSIF/LSP tools for semantic references, then run `ast-grep outline` on candidate files.
+

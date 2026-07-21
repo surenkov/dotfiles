@@ -10,9 +10,7 @@ Write the test first. Watch it fail. Write minimal code to pass. If you didn't w
 ## When to Use
 
 *Always:* New features, bug fixes, refactoring, and behavior changes. 
-*Exceptions (requires partner permission):* Throwaway prototypes, generated code, and configuration files.
-
-## The Iron Law
+*Exceptions (requires partner permission):* Throwaway prototypes, generated code, configuration files.
 
 ```
 NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
@@ -20,28 +18,6 @@ NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
 If you wrote implementation code before the test, delete it entirely and start over. No adapting or using it as reference. Delete means delete.
 
 ## Red-Green-Refactor
-
-```dot
-digraph tdd_cycle {
-    rankdir=LR;
-    red [label="RED\nWrite failing test", shape=box, style=filled, fillcolor="#ffcccc"];
-    verify_red [label="Verify fails\ncorrectly", shape=diamond];
-    green [label="GREEN\nMinimal code", shape=box, style=filled, fillcolor="#ccffcc"];
-    verify_green [label="Verify passes\nAll green", shape=diamond];
-    refactor [label="REFACTOR\nClean up", shape=box, style=filled, fillcolor="#ccccff"];
-    next [label="Next", shape=ellipse];
-
-    red -> verify_red;
-    verify_red -> green [label="yes"];
-    verify_red -> red [label="wrong\nfailure"];
-    green -> verify_green;
-    verify_green -> refactor [label="yes"];
-    verify_green -> green [label="no"];
-    refactor -> verify_green [label="stay\ngreen"];
-    verify_green -> next;
-    next -> red;
-}
-```
 
 ### 1. RED — Write Failing Test
 Write a single minimal test demonstrating the desired behavior. Avoid vague assertions or mock-dependent tests.
@@ -59,7 +35,7 @@ test('retries failed operations 3 times', async () => {
 ```
 
 ### 2. Verify RED — Watch It Fail
-Run the test (=npm test path/to/test.test.ts=). You must confirm it fails for the expected reason (feature missing) and not due to typos or syntax errors. If it passes or errors, fix the test first.
+Run the test (`npm test path/to/test.test.ts`). Confirm it fails for the expected reason (feature missing) and not typos or syntax errors. If it passes or errors, fix the test first.
 
 ### 3. GREEN — Minimal Code
 Write the absolute simplest, minimal code to pass the test. Do not over-engineer or add unrelated features (YAGNI).
@@ -79,8 +55,6 @@ Run tests to confirm the new test passes, other tests still pass, and output is 
 ### 5. REFACTOR — Clean Up
 Improve naming, remove duplication, and simplify helpers /only/ while keeping tests green. Do not add new behavior.
 
----
-
 ## Rationalizations & Red Flags: 5-Bullet Summary
 
 - *The Test-After Illusion:* Writing tests after implementation is self-deception; they bias towards testing what you wrote rather than requirements, almost always pass immediately, and fail to prove they actually detect bugs.
@@ -89,10 +63,7 @@ Improve naming, remove duplication, and simplify helpers /only/ while keeping te
 - *Design Defect Signals:* If a test is hard to write, requires huge mock setups, or needs highly coupled interfaces, your architecture is at fault; listen to the difficulty as a signal to simplify your design.
 - *False Pragmatism:* Excuses like "too simple to test", "TDD slows me down", or "exploratory code" are rationalizations. TDD is faster than debugging, prevents regression, serves as documentation, and enables safe refactoring.
 
----
-
 ## Example: Bug Fix
-
 *Bug:* Empty email accepted on form submission.
 
 ```typescript
@@ -129,7 +100,12 @@ function submitForm(data: { email: string }) {
 When a bug is found, write a failing test that reproduces it, verify the failure, and fix it using the standard TDD cycle. Never deploy fixes without an automated test.
 
 ## Testing Anti-Patterns
-Avoid mocking behavior instead of real execution, exposing test-only methods on production classes, or mocking without understanding downstream dependencies (see =@testing-anti-patterns.md=).
+
+- **SDK-Style Interface Mocking**: Avoid excessively mocking SDK or third-party service interfaces instead of testing against real implementations, lightweight fakes, or clean boundary adapters.
+- **Tautological Test Calculations**: Avoid tests that re-implement production math formulas or logic to calculate expected values in assertions. Tests must assert hardcoded, independently verified expected values.
+- **Mocking Behavior Over Execution**: Avoid mocking behavior instead of real execution.
+- **Exposing Test-Only Methods**: Avoid exposing test-only methods or backdoors on production classes.
+- **Mocking Without Downstream Understanding**: Avoid mocking without understanding downstream dependencies (see `@testing-anti-patterns.md`).
 
 ## Final Rule
 

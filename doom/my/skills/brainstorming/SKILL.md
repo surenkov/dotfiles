@@ -1,49 +1,50 @@
 ---
 name: brainstorming
-description: "You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation."
+description: You MUST use this before any creative work - creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements and design before implementation.
 ---
 
 # Brainstorming Ideas Into Designs
 
-Help turn ideas into structured, high-quality designs and specifications through focused, collaborative alignment.
+Turn ideas into structured, high-quality designs and specifications through focused, collaborative alignment.
 
-<HARD-GATE>
-Do NOT write code, scaffold files, or take implementation action until the design is presented and approved by the user. This applies to ALL tasks, regardless of complexity.
-</HARD-GATE>
+**CRITICAL REQUIREMENT:** Do NOT write code, scaffold files, or take implementation action until the design is presented and approved by the user. Applies to ALL tasks, regardless of complexity.
 
-## Checklist & Workflow
+## Workflow
 
-You MUST execute these steps in order:
+Execute steps sequentially:
 
 1. **Context Exploration**: Inspect existing files, docs, and git history to understand constraints and structure.
 2. **Targeted Clarification**: Ask **one targeted question at a time** to clarify goals, success criteria, and constraints. Use multiple-choice options where applicable to minimize user effort.
 3. **Scope Decomposition**: If the request covers multiple independent subsystems, decompose them. Brainstorm and design the first sub-project first.
-4. **Architectural Trade-offs**: Propose 2-3 distinct approaches. List trade-offs and explicitly recommend one with reasoning.
-5. **Iterative Specification**: Present the proposed architecture and design in logical sections (scaled to complexity). Verify correctness and get user approval for each section.
-6. **Write Design Doc**: Commit the finalized specification to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` (or user-specified location).
-7. **Spec Self-Review**: Validate the document to eliminate TODOs/Placeholders, resolve contradictions, and clarify ambiguities.
-8. **User Final Review**: Ask the user to review the written spec. Refine if changes are requested.
-9. **Transition**: Invoke the `writing-plans` skill to generate the implementation plan. This is the only allowed transition skill.
+4. **Architectural Trade-offs / Design-It-Twice**: Propose 2-3 distinct interface options, contrasting module depth (small interface hiding complex implementation) versus caller simplicity. List trade-offs and explicitly recommend one option with reasoning.
+5. **Iterative Specification**: Present proposed architecture and design in logical sections (scaled to complexity). Verify correctness and obtain user approval for each section.
+6. **Spec Self-Review**: Validate document to eliminate TODOs/placeholders, resolve contradictions, and clarify ambiguities.
+7. **User Final Review**: Ask user to review written spec. Refine if changes are requested.
+8. **Transition**: Invoke `writing-plans` skill to generate implementation plan (the only allowed transition skill).
 
-```dot
-digraph brainstorming {
-    "Explore Context" -> "Clarify Requirements (One-at-a-time)";
-    "Clarify Requirements (One-at-a-time)" -> "Propose 2-3 Approaches";
-    "Propose 2-3 Approaches" -> "Present Design Sections (Iterative)";
-    "Present Design Sections (Iterative)" -> "Write & Self-Review Spec";
-    "Write & Self-Review Spec" -> "User Review Spec";
-    "User Review Spec" -> "Invoke writing-plans Skill" [label="Approved"];
-}
-```
+## Decision-Tree Protocol
 
-## Key Guidelines
+- **One Question at a Time**: Never overwhelm the user with multiple questions in a single response.
+- **Provide Concrete Options**: Always suggest 2-4 structured choices (A, B, C...) with default recommendations to reduce decision fatigue.
+- **Decision-Tree Probing**: Use choices to narrow down problem space sequentially, following up based on selected branch.
+
+## Architecture & Codebase Design Principles
+
+- **Deep Modules**: Prefer small interfaces hiding large implementation capability and complexity. Avoid shallow modules where interface complexity approaches implementation complexity.
+- **Seams**: Interface boundaries in architecture.
+  - *1 Adapter = Hypothetical Seam*: Creating an abstraction interface for a single implementation/adapter is a hypothetical seam. Avoid premature abstraction.
+  - *2 Adapters = Real Seam*: A seam becomes real when at least two concrete adapters share the interface.
+- **Deletion Test**:
+  - Deleting module causes complexity to re-spread across N caller sites -> **Deep Module**.
+  - Deleting module causes complexity to vanish entirely without increasing caller burden -> **Pass-through / Shallow Module**.
+
+## Domain Terminology & ADRs
+
+- **Domain Terminology**: Maintain consistent domain terms. Whenever new domain concepts or terms emerge during brainstorming, update `CONTEXT.md` with clear definitions.
+
+## Core Guidelines
 
 - **Focus & Isolation**: Design decoupled systems with clear interfaces. Keep components small, modular, and testable.
 - **Working in Existing Codebases**: Propose improvements to existing code only when they directly support the target goal. Maintain existing architectural style.
 - **YAGNI**: Ruthlessly cut features that do not serve the immediate core goals.
-
----
-
-### Integration Recommendation: `spec-document-reviewer-prompt.md`
-**Keep `spec-document-reviewer-prompt.md` as a separate file.** 
-This document acts as an external prompt template for dispatching a dedicated, objective spec-reviewer subagent. Merging it would clutter `SKILL.md` with prompt-routing templates, violating the high-density, concise design of the brainstorming skill.
+- **Reviewer Prompt Integration**: Keep `spec-document-reviewer-prompt.md` as a separate file for dispatching dedicated spec-reviewer subagents.

@@ -26,11 +26,9 @@ Establish disciplined tool and workflow usage. If there is even a 1% chance a sk
 | "I'll just do this one quick thing." | Checking skills first prevents undisciplined mistakes. |
 | "I remember this skill already." | Skills change; invoke and read to ensure exact alignment. |
 
----
+## The 12 Active Superpowers Skills
 
-## The 11 Active Superpowers Skills
-
-Here are the 11 active, compacted skills available in the environment:
+Here are the 12 active, compacted skills available in the environment:
 
 ### 1. using-superpowers
 - **When:** At the start of any session or conversation.
@@ -75,3 +73,7 @@ Here are the 11 active, compacted skills available in the environment:
 ### 11. dispatching-parallel-agents
 - **When:** Facing two or more independent, non-sequential tasks or test failures.
 - **Purpose:** Dispatches concurrent specialized agents with isolated contexts to resolve issues in parallel.
+
+### 12. code-review
+- **When:** Reviewing changes since a target ref (e.g., branches, PRs, or diffs).
+- **Purpose:** Conducts parallel sub-agent reviews across two independent axes: Standards/smells and Spec compliance.

@@ -1,14 +1,7 @@
 # Testing Anti-Patterns
 
-**Load this reference when:** writing or changing tests, adding mocks, or tempted to add test-only methods to production code.
-
-## Overview
-
-Tests must verify real behavior, not mock behavior. Mocks are a means to isolate, not the thing being tested.
-
-**Core principle:** Test what the code does, not what the mocks do.
-
-**Following strict TDD prevents these anti-patterns.**
+## Core Principle
+* **Rule:** Test what the code does, not what the mocks do. Mocks isolate dependencies; they are not the subject under test. Strict TDD prevents these anti-patterns.
 
 ## The Iron Laws
 
@@ -29,11 +22,10 @@ test('renders sidebar', () => {
 });
 ```
 
-**Why this is wrong:**
+**Why This Fails:**
 - You're verifying the mock works, not that the component works
 - Test passes when mock is present, fails when it's not
 - Tells you nothing about real behavior
-
 **your human partner's correction:** "Are we testing the behavior of a mock?"
 
 **The fix:**
@@ -50,15 +42,10 @@ test('renders sidebar', () => {
 
 ### Gate Function
 
-```
 BEFORE asserting on any mock element:
-  Ask: "Am I testing real component behavior or just mock existence?"
-
-  IF testing mock existence:
-    STOP - Delete the assertion or unmock the component
-
-  Test real behavior instead
-```
+1. Ask: "Am I testing real component behavior or just mock existence?"
+2. IF testing mock existence: **STOP** — Delete the assertion or unmock the component.
+3. Test real behavior instead.
 
 ## Anti-Pattern 2: Test-Only Methods in Production
 
@@ -76,7 +63,7 @@ class Session {
 afterEach(() => session.destroy());
 ```
 
-**Why this is wrong:**
+**Why This Fails:**
 - Production class polluted with test-only code
 - Dangerous if accidentally called in production
 - Violates YAGNI and separation of concerns
@@ -101,19 +88,9 @@ afterEach(() => cleanupSession(session));
 
 ### Gate Function
 
-```
 BEFORE adding any method to production class:
-  Ask: "Is this only used by tests?"
-
-  IF yes:
-    STOP - Don't add it
-    Put it in test utilities instead
-
-  Ask: "Does this class own this resource's lifecycle?"
-
-  IF no:
-    STOP - Wrong class for this method
-```
+1. Ask: "Is this only used by tests?" IF yes: **STOP** — Put it in test utilities instead.
+2. Ask: "Does this class own this resource's lifecycle?" IF no: **STOP** — Wrong class for this method.
 
 ## Anti-Pattern 3: Mocking Without Understanding
 
@@ -131,7 +108,7 @@ test('detects duplicate server', () => {
 });
 ```
 
-**Why this is wrong:**
+**Why This Fails:**
 - Mocked method had side effect test depended on (writing config)
 - Over-mocking to "be safe" breaks actual behavior
 - Test passes for wrong reason or fails mysteriously
@@ -150,29 +127,13 @@ test('detects duplicate server', () => {
 
 ### Gate Function
 
-```
 BEFORE mocking any method:
-  STOP - Don't mock yet
-
-  1. Ask: "What side effects does the real method have?"
-  2. Ask: "Does this test depend on any of those side effects?"
-  3. Ask: "Do I fully understand what this test needs?"
-
-  IF depends on side effects:
-    Mock at lower level (the actual slow/external operation)
-    OR use test doubles that preserve necessary behavior
-    NOT the high-level method the test depends on
-
-  IF unsure what test depends on:
-    Run test with real implementation FIRST
-    Observe what actually needs to happen
-    THEN add minimal mocking at the right level
-
-  Red flags:
-    - "I'll mock this to be safe"
-    - "This might be slow, better mock it"
-    - Mocking without understanding the dependency chain
-```
+1. Ask: "What side effects does the real method have?"
+2. Ask: "Does this test depend on any of those side effects?"
+3. Ask: "Do I fully understand what this test needs?"
+* **IF depends on side effects:** Mock at lower level (actual slow/external operation) or use test doubles that preserve necessary behavior. Do NOT mock high-level methods.
+* **IF unsure:** Run test with real implementation FIRST, observe actual needs, then add minimal mocking at the right level.
+* **Red flags:** Mocking "just to be safe", assuming slow execution, or mocking without understanding dependency chain.
 
 ## Anti-Pattern 4: Incomplete Mocks
 
@@ -190,10 +151,9 @@ const mockResponse = {
 
 **Why this is wrong:**
 - **Partial mocks hide structural assumptions** - You only mocked fields you know about
-- **Downstream code may depend on fields you didn't include** - Silent failures
-- **Tests pass but integration fails** - Mock incomplete, real API complete
-- **False confidence** - Test proves nothing about real behavior
-
+- **Downstream dependence:** Downstream code may depend on omitted fields, causing silent failures.
+- **Tests pass but integration fails:** Mock incomplete, real API complete.
+- **False confidence:** Test proves nothing about real behavior.
 **The Iron Rule:** Mock the COMPLETE data structure as it exists in reality, not just fields your immediate test uses.
 
 **The fix:**
@@ -209,21 +169,11 @@ const mockResponse = {
 
 ### Gate Function
 
-```
 BEFORE creating mock responses:
-  Check: "What fields does the real API response contain?"
-
-  Actions:
-    1. Examine actual API response from docs/examples
-    2. Include ALL fields system might consume downstream
-    3. Verify mock matches real response schema completely
-
-  Critical:
-    If you're creating a mock, you must understand the ENTIRE structure
-    Partial mocks fail silently when code depends on omitted fields
-
-  If uncertain: Include all documented fields
-```
+1. Examine actual API response from docs/examples.
+2. Include ALL fields the system might consume downstream.
+3. Verify mock matches real response schema completely.
+* **Critical:** Understand the ENTIRE structure before creating a mock. Partial mocks fail silently when code accesses omitted fields. If uncertain, include all documented fields.
 
 ## Anti-Pattern 5: Integration Tests as Afterthought
 
@@ -235,40 +185,26 @@ BEFORE creating mock responses:
 ```
 
 **Why this is wrong:**
-- Testing is part of implementation, not optional follow-up
-- TDD would have caught this
-- Can't claim complete without tests
-
-**The fix:**
-```
-TDD cycle:
-1. Write failing test
-2. Implement to pass
-3. Refactor
-4. THEN claim complete
-```
+*Testing is integral to implementation.* Cannot claim complete without tests.
+*Fix (TDD Cycle):* 1. Write failing test → 2. Implement to pass → 3. Refactor → 4. Claim complete.
 
 ## When Mocks Become Too Complex
 
-**Warning signs:**
+### Warning Signs
 - Mock setup longer than test logic
 - Mocking everything to make test pass
 - Mocks missing methods real components have
 - Test breaks when mock changes
 
-**your human partner's question:** "Do we need to be using a mock here?"
-
-**Consider:** Integration tests with real components often simpler than complex mocks
+*Partner Question:* "Do we need to be using a mock here?"
+*Action:* Prefer integration tests with real components over complex mock hierarchies.
 
 ## TDD Prevents These Anti-Patterns
 
-**Why TDD helps:**
 1. **Write test first** → Forces you to think about what you're actually testing
 2. **Watch it fail** → Confirms test tests real behavior, not mocks
 3. **Minimal implementation** → No test-only methods creep in
 4. **Real dependencies** → You see what the test actually needs before mocking
-
-**If you're testing mock behavior, you violated TDD** - you added mocks without watching test fail against real code first.
 
 ## Quick Reference
 
@@ -293,7 +229,4 @@ TDD cycle:
 ## The Bottom Line
 
 **Mocks are tools to isolate, not things to test.**
-
-If TDD reveals you're testing mock behavior, you've gone wrong.
-
-Fix: Test real behavior or question why you're mocking at all.
+If TDD reveals you're testing mock behavior, test real behavior or question why you're mocking at all.
