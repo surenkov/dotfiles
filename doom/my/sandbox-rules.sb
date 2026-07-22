@@ -37,6 +37,7 @@
        (path "/private/var/run/resolv.conf")
        (path "/var")
        (path "/var/run")
+       (subpath "/opt/homebrew/bin")
 
        ;; Git configuration
        (literal (string-append (param "HOME_DIR") "/.gitconfig"))

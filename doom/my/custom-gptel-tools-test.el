@@ -83,6 +83,14 @@
   (let ((text "Line 1\nLine 2\nLine 3"))
     (should (equal (my--truncate-output text 10) text))))
 
+(ert-deftest test-truncate-output-from-buffer ()
+  "Verify that my--truncate-output accepts a buffer object directly."
+  (with-temp-buffer
+    (insert "Line 1\nLine 2\nLine 3\nLine 4\nLine 5")
+    (let ((result (my--truncate-output (current-buffer) 3)))
+      (should (string-match-p "Truncated" result))
+      (should (string-match-p "gptel-output-" result)))))
+
 (ert-deftest test-truncate-output-exceeds-lines ()
   "Verify truncation and caching when lines exceed the line limit."
   (let* ((text "1\n2\n3\n4\n5\n6\n7\n8\n9\n10")
@@ -90,7 +98,7 @@
          (result (my--truncate-output text 4)))
     ;; The result should contain truncation messages and a reference to the temp file
     (should (string-match-p "Truncated" result))
-    (should (string-match-p "gptel-bash-output-" result))
+    (should (string-match-p "gptel-output-" result))
     (should (string-match-p "saved to temporary file" result))))
 
 (ert-deftest test-truncate-output-exceeds-bytes ()
@@ -99,7 +107,7 @@
          (my/custom-gptel-tool-output-limit 10) ;; Extremely small to trigger byte limit
          (result (my--truncate-output text 100)))
     (should (string-match-p "Truncated" result))
-    (should (string-match-p "gptel-bash-output-" result))
+    (should (string-match-p "gptel-output-" result))
     (should (string-match-p "saved to temporary file" result))))
 
 (ert-deftest test-truncate-output-extremely-long-lines ()
@@ -193,7 +201,6 @@
   "Verify that my/ast-grep-tool constructs command-line arguments correctly."
   (let ((captured-command nil))
     (cl-letf* (((symbol-function 'executable-find) (lambda (bin) (if (equal bin "ast-grep") "/usr/local/bin/ast-grep" nil)))
-               ((symbol-function 'my--path-allowed-p) (lambda (_path) t))
                ((symbol-function 'my/get-resolved-skill-dirs) (lambda () nil))
                ((symbol-function 'my--async-exec)
                 (lambda (_name command callback &rest _args)
@@ -288,3 +295,280 @@
              (items (plist-get tools-arg :items)))
         (should tools-arg)
         (should (equal (plist-get items :enum) ["fd" "rg"]))))))
+
+(ert-deftest test-sandbox-cache ()
+  "Verify that sandbox wrapping utilize cache and clear correctly."
+  (my/custom-gptel-clear-caches)
+  (let ((root (doom-project-root)))
+    (let ((wrapped (my--wrap-sandbox-command '("ls"))))
+      (should (member "/usr/bin/sandbox-exec" wrapped))
+      (should (cl-some (lambda (arg) (string-prefix-p "TARGET_DIR=" arg)) wrapped)))
+    ;; Test cache invalidation
+    (my/custom-gptel-clear-caches)
+    (should (zerop (hash-table-count my/custom-gptel--path-cache)))
+    ;; Test truename caching
+    (let ((home-truename (my/custom-gptel--get-truename "~")))
+      (should (stringp home-truename))
+      (should (> (hash-table-count my/custom-gptel--path-cache) 0))
+      (should (equal (gethash "~" my/custom-gptel--path-cache) home-truename)))
+    (my/custom-gptel-clear-caches)
+    (should (zerop (hash-table-count my/custom-gptel--path-cache)))))
+
+(defun my-test--cat-file-tool (path &optional offset limit)
+  "Synchronous test helper for `my/cat-file-tool`."
+  (let ((result nil)
+        (done nil))
+    (my/cat-file-tool (lambda (res)
+                        (setq result res)
+                        (setq done t))
+                      path offset limit)
+    (with-timeout (5.0 (error "Timed out waiting for my/cat-file-tool callback"))
+      (while (not done)
+        (accept-process-output nil 0.05)))
+    result))
+
+(ert-deftest test-cat-file-tool-formatting ()
+  "Test my/cat-file-tool formatting with offset and limits."
+  (let ((my/custom-gptel-sandbox-profile-path nil)
+        (temp-file (make-temp-file "gptel-output-test-cat-")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (dotimes (i 100)
+              (insert (format "Line content %d\n" (1+ i)))))
+          ;; 1. Read first 5 lines
+          (let ((res (my-test--cat-file-tool temp-file 1 5)))
+            (should (string-match-p "^1:Line content 1" res))
+            (should (string-match-p "5:Line content 5" res))
+            (should (string-match-p "Showing lines 1-5" res)))
+          ;; 2. Read offset 50, limit 5
+          (let ((res (my-test--cat-file-tool temp-file 50 5)))
+            (should (string-match-p "50:Line content 50" res))
+            (should (string-match-p "54:Line content 54" res)))
+          ;; 3. Offset beyond file length
+          (let ((res (my-test--cat-file-tool temp-file 200 5)))
+            (should (string-match-p "Offset 200 is beyond file length" res))))
+      (delete-file temp-file))))
+
+
+(ert-deftest test-cat-file-tool-large-file-chunking ()
+  "Test my/cat-file-tool on large files (>256KB) to verify chunked reading."
+  (let ((my/custom-gptel-sandbox-profile-path nil)
+        (temp-file (make-temp-file "gptel-output-test-cat-large-")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (dotimes (i 10000)
+              (insert (format "Line content %05d with extra padding padding padding\n" (1+ i)))))
+          ;; Verify file size is > 256KB
+          (should (> (file-attribute-size (file-attributes temp-file)) (* 256 1024)))
+          ;; 1. Read early chunk (lines 1 to 10)
+          (let ((res (my-test--cat-file-tool temp-file 1 10)))
+            (should (string-match-p "^1:Line content 00001" res))
+            (should (string-match-p "10:Line content 00010" res))
+            (should (string-match-p "Showing lines 1-10" res)))
+          ;; 2. Read middle chunk with offset (lines 5000 to 5005)
+          (let ((res (my-test--cat-file-tool temp-file 5000 5)))
+            (should (string-match-p "5000:Line content 05000" res))
+            (should (string-match-p "5004:Line content 05004" res))
+            (should (string-match-p "Showing lines 5000-5004" res))))
+      (delete-file temp-file))))
+
+(ert-deftest test-get-visiting-buffers ()
+  "Test my--get-visiting-buffers detects open buffers and handles nonexistent/invalid files safely."
+  (let* ((temp-file (make-temp-file "test-visiting-"))
+         (buf (find-file-noselect temp-file)))
+    (unwind-protect
+        (progn
+          (should (member buf (my--get-visiting-buffers (list temp-file))))
+          (should-not (my--get-visiting-buffers (list "/nonexistent/file.txt")))
+          (should-not (my--get-visiting-buffers (list "" nil)))
+          (let ((link (expand-file-name "loop-link" (file-name-directory temp-file))))
+            (make-symbolic-link link link)
+            (unwind-protect
+                (should-not (my--get-visiting-buffers (list link)))
+              (ignore-errors (delete-file link)))))
+      (when (buffer-live-p buf) (kill-buffer buf))
+      (delete-file temp-file))))
+
+(ert-deftest test-edit-tool-fast-path ()
+  "Test my/edit-tool skips timer delay when no files are open in visiting buffers."
+  (let ((callback-called nil)
+        (result-out nil)
+        (patch "--- a/nonexistent.txt\n+++ b/nonexistent.txt\n@@ -0,0 +1 @@\n+test\n"))
+    (cl-letf* (((symbol-function 'my--async-exec)
+                (lambda (_name _command callback &rest _args)
+                  (funcall callback 0 "Patch applied successfully")
+                  nil)))
+      ;; 1. Fast path: no visiting buffers for nonexistent.txt
+      (my/edit-tool (lambda (out)
+                      (setq callback-called t)
+                      (setq result-out out))
+                    patch)
+      (should callback-called)
+      (should (equal result-out "Patch applied successfully"))))
+
+  ;; 2. Delayed path: visiting buffer exists
+  (let* ((temp-file (make-temp-file "test-edit-tool-"))
+         (buf (find-file-noselect temp-file))
+         (rel-file (file-relative-name temp-file (doom-project-root)))
+         (patch (format "--- a/%s\n+++ b/%s\n@@ -0,0 +1 @@\n+test\n" rel-file rel-file))
+         (timer-scheduled nil)
+         (callback-called nil)
+         (result-out nil))
+    (unwind-protect
+        (cl-letf* (((symbol-function 'my--async-exec)
+                    (lambda (_name _command callback &rest _args)
+                      (funcall callback 0 "Patch applied successfully")
+                      nil))
+                   ((symbol-function 'run-with-timer)
+                    (lambda (delay _repeat fn &rest _args)
+                      (setq timer-scheduled t)
+                      (should (= delay my/custom-gptel-edit-diagnostic-delay))
+                      (funcall fn)
+                      nil)))
+          (my/edit-tool (lambda (out)
+                          (setq callback-called t)
+                          (setq result-out out))
+                        patch)
+          (should timer-scheduled)
+          (should callback-called)
+          (should (equal result-out "Patch applied successfully")))
+      (when (buffer-live-p buf) (kill-buffer buf))
+      (delete-file temp-file))))
+
+(ert-deftest test-clean-patch-string ()
+  "Verify stripping markdown fences from patch strings."
+  (let ((markdown-patch "```diff\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-a\n+b\n```"))
+    (should (equal (my--clean-patch-string markdown-patch)
+                   "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-a\n+b\n"))))
+
+(ert-deftest test-cat-file-tool-string-arguments ()
+  "Verify cat tool handles string numbers for offset and limit safely."
+  (let ((my/custom-gptel-sandbox-profile-path nil)
+        (temp-file (make-temp-file "test-cat-str-")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert "line1\nline2\nline3\nline4\nline5\n"))
+          (let ((res nil))
+            (my/cat-file-tool (lambda (out) (setq res out))
+                              temp-file "2" "2")
+            ;; Wait briefly for async execution
+            (while (null res)
+              (accept-process-output nil 0.01))
+            (should (string-match-p "2:line2" res))
+            (should (string-match-p "3:line3" res))
+            (should-not (string-match-p "1:line1" res))
+            (should-not (string-match-p "4:line4" res))))
+      (delete-file temp-file))))
+
+(ert-deftest test-edit-tool-existing-file-new-file-patch ()
+  "Verify edit tool removes an existing file if patch specifies --- /dev/null."
+  (let* ((my/custom-gptel-sandbox-profile-path nil)
+         (temp-file (make-temp-file (expand-file-name "test-edit-exist-" (doom-project-root))))
+         (rel-file (file-relative-name temp-file (doom-project-root)))
+         (patch (format "--- /dev/null\n+++ b/%s\n@@ -0,0 +1 @@\n+new content\n" rel-file))
+         (res nil))
+    (unwind-protect
+        (progn
+          (my/edit-tool (lambda (out) (setq res out)) patch)
+          (while (null res)
+            (accept-process-output nil 0.01))
+          (should-not (string-match-p "Error" res))
+          (with-temp-buffer
+            (insert-file-contents temp-file)
+            (should (equal (buffer-string) "new content\n"))))
+      (when (file-exists-p temp-file)
+        (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-fallback-patch-application ()
+  "Verify edit tool falls back to patch command when git apply fails on context mismatch."
+  (let* ((my/custom-gptel-sandbox-profile-path nil)
+         (temp-file (make-temp-file (expand-file-name "test-edit-fallback-" (doom-project-root))))
+         (rel-file (file-relative-name temp-file (doom-project-root)))
+         (res nil))
+    (unwind-protect
+        (progn
+          ;; File has extra blank line at start
+          (with-temp-file temp-file
+            (insert "\nfunc Hello() {\n\tfmt.Println(\"hello\")\n}\n"))
+          ;; Patch expects no blank line at start (git apply will fail, patch -p1 will succeed)
+          (let ((patch (format "--- a/%s\n+++ b/%s\n@@ -1,3 +1,3 @@\n func Hello() {\n-\tfmt.Println(\"hello\")\n+\tfmt.Println(\"world\")\n }\n"
+                               rel-file rel-file)))
+            (my/edit-tool (lambda (out) (setq res out)) patch)
+            (while (null res)
+              (accept-process-output nil 0.01))
+            (should-not (string-match-p "Error applying patch" res))
+            (with-temp-buffer
+              (insert-file-contents temp-file)
+              (should (string-match-p "fmt.Println(\"world\")" (buffer-string))))))
+      (when (file-exists-p temp-file)
+        (delete-file temp-file))
+      (let ((rej (concat temp-file ".rej"))
+            (orig (concat temp-file ".orig")))
+        (when (file-exists-p rej) (delete-file rej))
+        (when (file-exists-p orig) (delete-file orig))))))
+
+(ert-deftest test-split-patch-by-file ()
+  "Verify splitting a multi-file patch into per-file patches."
+  (let ((multi-patch "--- a/file1.go\n+++ b/file1.go\n@@ -1 +1 @@\n-a\n+b\n--- /dev/null\n+++ b/file2.go\n@@ -0,0 +1 @@\n+c\n"))
+    (should (equal (my--split-patch-by-file multi-patch)
+                   '("--- a/file1.go\n+++ b/file1.go\n@@ -1 +1 @@\n-a\n+b\n"
+                     "--- /dev/null\n+++ b/file2.go\n@@ -0,0 +1 @@\n+c\n")))))
+
+(ert-deftest test-normalize-patch-new-file ()
+  "Verify new file patch normalization adds '+' to empty and context lines."
+  (let ((bad-patch "--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,3 @@\n+package foo\n\n func bar() {}\n"))
+    (should (equal (my--normalize-patch-string bad-patch)
+                   "--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,3 @@\n+package foo\n+\n+func bar() {}\n"))))
+
+(ert-deftest test-normalize-patch-existing-file ()
+  "Verify existing file patch normalization adds leading spaces to context lines."
+  (let ((bad-patch "--- a/old.go\n+++ b/old.go\n@@ -1,3 +1,3 @@\nfunc foo() {\n\tbar()\n+	baz()\n}\n"))
+    (should (equal (my--normalize-patch-string bad-patch)
+                   "--- a/old.go\n+++ b/old.go\n@@ -1,3 +1,3 @@\n func foo() {\n \tbar()\n+\tbaz()\n }\n"))))
+
+(ert-deftest test-edit-tool-new-file-empty-lines ()
+  "Verify edit-tool handles new file patches containing bare empty lines."
+  (let* ((my/custom-gptel-sandbox-profile-path nil)
+         (target (expand-file-name "test-new-empty.go" (doom-project-root)))
+         (rel-file (file-relative-name target (doom-project-root)))
+         (patch (format "--- /dev/null\n+++ b/%s\n@@ -0,0 +1,3 @@\n+package main\n\n+func main() {}\n" rel-file))
+         (res nil))
+    (unwind-protect
+        (progn
+          (my/edit-tool (lambda (out) (setq res out)) patch)
+          (while (null res)
+            (accept-process-output nil 0.01))
+          (should-not (string-match-p "Error" res))
+          (should (file-exists-p target))
+          (with-temp-buffer
+            (insert-file-contents target)
+            (should (equal (buffer-string) "package main\n\nfunc main() {}\n"))))
+      (when (file-exists-p target) (delete-file target)))))
+
+(ert-deftest test-edit-tool-multi-file-patch ()
+  "Verify edit-tool applies multi-file patches successfully."
+  (let* ((my/custom-gptel-sandbox-profile-path nil)
+         (file1 (make-temp-file (expand-file-name "test-multi1-" (doom-project-root))))
+         (file2 (expand-file-name "test-multi2.go" (doom-project-root)))
+         (rel1 (file-relative-name file1 (doom-project-root)))
+         (rel2 (file-relative-name file2 (doom-project-root)))
+         (patch (format "--- a/%s\n+++ b/%s\n@@ -1 +1 @@\n-old\n+new\n--- /dev/null\n+++ b/%s\n@@ -0,0 +1 @@\n+created\n" rel1 rel1 rel2))
+         (res nil))
+    (unwind-protect
+        (progn
+          (with-temp-file file1 (insert "old\n"))
+          (my/edit-tool (lambda (out) (setq res out)) patch)
+          (while (null res)
+            (accept-process-output nil 0.01))
+          (should-not (string-match-p "Error" res))
+          (with-temp-buffer
+            (insert-file-contents file1)
+            (should (equal (buffer-string) "new\n")))
+          (with-temp-buffer
+            (insert-file-contents file2)
+            (should (equal (buffer-string) "created\n"))))
+      (when (file-exists-p file1) (delete-file file1))
+      (when (file-exists-p file2) (delete-file file2)))))

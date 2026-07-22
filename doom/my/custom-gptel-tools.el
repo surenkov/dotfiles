@@ -28,96 +28,168 @@ Paths can be absolute or relative to the project root.")
   "Path to the directory containing methodology skills.")
 
 (defvar my/custom-gptel-tool-output-limit (* 100 1024)
-  "Maximum output size in bytes for `bash` tool commands before truncation and caching.")
+  "Maximum output size in bytes for shell commands before truncation/caching.")
+
+(defcustom my/custom-gptel-edit-diagnostic-delay 1.5
+  "Delay in seconds before checking diagnostics after applying a patch."
+  :type 'number
+  :group 'custom-gptel)
+
+(defvar my/custom-gptel--path-cache (make-hash-table :test 'equal)
+  "Hash table mapping raw paths to their expanded file truenames.")
+
+(defvar my/custom-gptel--allowed-dirs-cache nil
+  "Cached list of allowed directories for file access.")
+
+(defun my/custom-gptel-clear-caches ()
+  "Clear cached path resolution and directory structures."
+  (interactive)
+  (clrhash my/custom-gptel--path-cache)
+  (setq my/custom-gptel--allowed-dirs-cache nil))
+
+(defun my/custom-gptel--get-truename (path &optional dir)
+  "Return cached truename for PATH expanded relative to optional DIR."
+  (let ((key (if dir (cons path dir) path)))
+    (or (gethash key my/custom-gptel--path-cache)
+        (puthash key (file-truename (expand-file-name path dir)) my/custom-gptel--path-cache))))
+
+(defun my/custom-gptel--get-allowed-cache ()
+  "Return cached list of allowed directories."
+  (or my/custom-gptel--allowed-dirs-cache
+      (setq my/custom-gptel--allowed-dirs-cache
+            (let ((root (my/custom-gptel--get-truename (doom-project-root))))
+              (cons root
+                    (mapcar (lambda (d) (my/custom-gptel--get-truename d root))
+                            (append my/custom-gptel-tools-whitelist-directories
+                                    (my/get-resolved-skill-dirs))))))))
 
 (defun my--wrap-sandbox-command (command-args)
   "Wrap COMMAND-ARGS in `sandbox-exec` if the profile exists and we are local.
-Injects TARGET_DIR, HOME_DIR, CACHE_DIR, TMP_DIR, and WHITELIST_DIRS."
+Injects TARGET_DIR, HOME_DIR, TMP_DIR, and WHITELIST_DIRS."
   (let ((sandbox-exec "/usr/bin/sandbox-exec"))
     (if my/custom-gptel-sandbox-profile-path
-        (let* ((root (expand-file-name (doom-project-root)))
-               (home (expand-file-name "~"))
-               (ast-grep-bin (executable-find "ast-grep"))
-               (ast-grep-dir (and ast-grep-bin (file-name-directory ast-grep-bin)))
-               (whitelist (mapcar (lambda (d) (expand-file-name d root))
-                                  (append my/custom-gptel-tools-whitelist-directories
-                                          (my/get-resolved-skill-dirs)
-                                          (and ast-grep-dir (list ast-grep-dir)))))
+        (let* ((root (my/custom-gptel--get-truename (doom-project-root)))
+               (home (my/custom-gptel--get-truename "~"))
+               (tmp (my/custom-gptel--get-truename temporary-file-directory))
+               (whitelist (my/custom-gptel--get-allowed-cache))
                (whitelist-str (mapconcat #'identity whitelist ":")))
           (append (list sandbox-exec
                         "-f" my/custom-gptel-sandbox-profile-path
                         "-D" (format "TARGET_DIR=%s" root)
                         "-D" (format "HOME_DIR=%s" home)
-                        "-D" (format "TMP_DIR=%s" (expand-file-name temporary-file-directory))
+                        "-D" (format "TMP_DIR=%s" tmp)
                         "-D" (format "WHITELIST_DIRS=%s" whitelist-str))
                   command-args))
       command-args)))
 
-(defun my--path-allowed-p (path)
-  "Return non-nil if PATH is within allowed directories or is a valid gptel bash temp file.
-Resolves symlinks before checking."
-  (let* ((root (file-truename (expand-file-name (doom-project-root))))
-         (full-path (file-truename (expand-file-name path root)))
-         (temp-prefix (file-truename (expand-file-name (concat (file-name-as-directory (file-truename temporary-file-directory)) "gptel-bash-output-"))))
-         (allowed-dirs (cons root (mapcar (lambda (d) (file-truename (expand-file-name d root)))
-                                          (append my/custom-gptel-tools-whitelist-directories
-                                                  (my/get-resolved-skill-dirs))))))
-    (or (string-prefix-p temp-prefix full-path)
-        (cl-some (lambda (dir)
-                   (let ((dir-abs (file-name-as-directory dir)))
-                     (string-prefix-p dir-abs (file-name-as-directory full-path))))
-                 allowed-dirs))))
-
-(defun my--truncate-output (text &optional max-lines)
-  "Truncate TEXT to MAX-LINES or `my/custom-gptel-tool-output-limit`.
-If MAX-LINES is negative, bypass truncation and return TEXT unchanged.
-If TEXT exceeds either limit, write full text to a secure temporary file."
-  (if (or (not text) (string-empty-p text))
+(defun my--truncate-buffer-in-place (buf max-lines &optional total-bytes orig-string)
+  "Truncate buffer BUF in place to MAX-LINES or `my/custom-gptel-tool-output-limit`.
+TOTAL-BYTES is optional byte length of BUF.
+If ORIG-STRING is provided, it is returned when truncation is not needed.
+Returns the output string (truncated with notice if exceeding limits)."
+  (if (not (buffer-live-p (get-buffer buf)))
       ""
-    (let* ((max-lines (or max-lines 200))
-           (bytes (string-bytes text)))
-      (if (and (integerp max-lines) (< max-lines 0))
-          text
-        (with-temp-buffer
-          (insert text)
-          (let ((len (count-lines (point-min) (point-max))))
-            (if (and (<= len max-lines)
-                     (<= bytes my/custom-gptel-tool-output-limit))
-                text
-              (let* ((temp-file (make-temp-file "gptel-bash-output-"))
-                     (keep (max 1 (or (/ max-lines 2) 100)))
-                     (first-part-raw
-                      (progn
-                        (goto-char (point-min))
-                        (forward-line keep)
-                        (buffer-substring-no-properties (point-min) (point))))
-                     (last-part-raw
-                      (progn
-                        (goto-char (point-max))
-                        (forward-line (- keep))
-                        (buffer-substring-no-properties (point) (point-max))))
-                     (half-limit (/ my/custom-gptel-tool-output-limit 2))
-                     (head-part (if (> (string-bytes first-part-raw) half-limit)
-                                    (substring first-part-raw 0 (min (length first-part-raw) half-limit))
-                                  first-part-raw))
-                     (tail-part (if (> (string-bytes last-part-raw) half-limit)
-                                    (substring last-part-raw (max 0 (- (length last-part-raw) half-limit)) (length last-part-raw))
-                                  last-part-raw))
-                     (truncated-bytes (- bytes (string-bytes head-part) (string-bytes tail-part)))
-                     (formatted-msg (format "[... Truncated %d bytes/lines from middle. Total size: %.2f KB, total lines: %d ...]\n%s\n...\n%s\n[... Full output saved to temporary file: %s ...]\nYou can read the complete output by invoking the `cat` tool on the path above if needed."
-                                             truncated-bytes
-                                             (/ bytes 1024.0)
-                                             len
-                                             head-part
-                                             tail-part
-                                             temp-file)))
-                (write-region (point-min) (point-max) temp-file nil 'no-message)
-                formatted-msg))))))))
+    (with-current-buffer buf
+      (goto-char (point-min))
+      (skip-chars-forward " \t\n\r")
+      (delete-region (point-min) (point))
+      (goto-char (point-max))
+      (skip-chars-backward " \t\n\r")
+      (delete-region (point) (point-max))
+      (if (= (buffer-size) 0)
+          ""
+        (let ((max-lines (or max-lines 200)))
+          (if (and (integerp max-lines) (< max-lines 0))
+              (or orig-string (buffer-string))
+            (let* ((bytes (or total-bytes
+                              (if (and (position-bytes (point-max))
+                                       (position-bytes (point-min)))
+                                  (- (position-bytes (point-max))
+                                     (position-bytes (point-min)))
+                                (string-bytes (buffer-substring-no-properties (point-min) (point-max))))))
+                   (len (count-lines (point-min) (point-max))))
+              (if (and (<= len max-lines)
+                       (<= bytes my/custom-gptel-tool-output-limit))
+                  (or orig-string (buffer-string))
+                (let* ((temp-file (make-temp-file "gptel-output-"))
+                       (keep (max 1 (or (/ max-lines 2) 100)))
+                       (first-part-raw
+                        (progn
+                          (goto-char (point-min))
+                          (forward-line keep)
+                          (buffer-substring-no-properties (point-min) (point))))
+                       (last-part-raw
+                        (progn
+                          (goto-char (point-max))
+                          (forward-line (- keep))
+                          (buffer-substring-no-properties (point) (point-max))))
+                       (half-limit (/ my/custom-gptel-tool-output-limit 2))
+                       (head-part (if (> (string-bytes first-part-raw) half-limit)
+                                      (substring first-part-raw 0 (min (length first-part-raw) half-limit))
+                                    first-part-raw))
+                       (tail-part (if (> (string-bytes last-part-raw) half-limit)
+                                      (substring last-part-raw (max 0 (- (length last-part-raw) half-limit)) (length last-part-raw))
+                                    last-part-raw))
+                       (truncated-bytes (- bytes (string-bytes head-part) (string-bytes tail-part)))
+                       (formatted-msg (format "[... Truncated %d bytes/lines from middle. Total size: %.2f KB, total lines: %d ...]
+%s
+...
+%s
+[... Full output saved to temporary file: %s ...]
+You can read the complete output by invoking the `cat` tool on the path above if needed."
+                                              truncated-bytes
+                                              (/ bytes 1024.0)
+                                              len
+                                              head-part
+                                              tail-part
+                                              temp-file)))
+                  (write-region (point-min) (point-max) temp-file nil 'no-message)
+                  formatted-msg)))))))))
 
-(defun my--get-diagnostics-for-file (path)
+(defun my--truncate-output (output &optional max-lines)
+  "Truncate OUTPUT (a string or buffer) to MAX-LINES or `my/custom-gptel-tool-output-limit`.
+If MAX-LINES is negative, bypass truncation and return OUTPUT as a string.
+If OUTPUT exceeds either limit, write full text to a secure temporary file."
+  (cond
+   ((null output) "")
+   ((bufferp output)
+    (my--truncate-buffer-in-place output max-lines))
+   ((stringp output)
+    (if (string-empty-p output)
+        ""
+      (if (and (integerp max-lines) (< max-lines 0))
+          output
+        (with-temp-buffer
+          (insert output)
+          (my--truncate-buffer-in-place (current-buffer) max-lines (string-bytes output) output)))))
+   (t "")))
+
+(defun my--get-visiting-buffers (files &optional project-root)
+  "Return a list of live buffers visiting any file in FILES.
+FILES is a list of file paths (relative or absolute).
+Optional PROJECT-ROOT defaults to `doom-project-root`."
+  (let ((root (or project-root (doom-project-root)))
+        (bufs nil))
+    (dolist (file files)
+      (when (and (stringp file) (not (string-empty-p file)))
+        (let* ((abs-path (expand-file-name file root))
+               (truename (ignore-errors (file-truename abs-path)))
+               (buf (or (ignore-errors (find-buffer-visiting abs-path))
+                        (and truename (ignore-errors (find-buffer-visiting truename))))))
+          (when (and buf (buffer-live-p buf))
+            (push buf bufs)))))
+    (delete-dups (nreverse bufs))))
+
+(defun my--get-diagnostics-for-file (path &optional project-root)
   "Retrieve active diagnostics/errors for the file at PATH.
+Optional PROJECT-ROOT defaults to `doom-project-root`.
 Checks Flycheck, Flymake, and LSP (Eglot or lsp-mode) if available."
-  (let ((buf (and path (find-buffer-visiting path))))
+  (let* ((root (or project-root (doom-project-root)))
+         (abs-path (and (stringp path) (not (string-empty-p path)) (expand-file-name path root)))
+         (truename (and abs-path (ignore-errors (file-truename abs-path))))
+         (buf (and abs-path
+                   (or (ignore-errors (find-buffer-visiting abs-path))
+                       (and truename (ignore-errors (find-buffer-visiting truename)))))))
     (when (buffer-live-p buf)
       (with-current-buffer buf
         (let (diags)
@@ -162,59 +234,53 @@ and MAX-LINES specifies truncation limits."
                 (lambda (proc _event)
                   (when (memq (process-status proc) '(exit signal))
                     (let ((exit-code (process-exit-status proc))
-                          (output (with-current-buffer output-buffer
-                                    (string-trim (buffer-string)))))
+                          (output (my--truncate-output output-buffer (or max-lines 300))))
                       (kill-buffer output-buffer)
                       ;; Truncate output to avoid overloading model context (default 300 lines)
-                      (funcall callback exit-code (my--truncate-output output (or max-lines 300)))))))))
+                      (funcall callback exit-code output)))))))
     (when input
       (process-send-string proc input))
     (process-send-eof proc) ;; Close stdin to prevent hanging
     proc)) ;; Return the process object so it can be managed/killed
 
-(defun my/cat-file-tool (path &optional offset limit)
-  "Read the contents of file at PATH and return it as a string.
+(defun my--coerce-number (val default)
+  "Return VAL as a number, using DEFAULT if VAL is nil or invalid."
+  (cond
+   ((numberp val) val)
+   ((and (stringp val) (string-match-p "\\`-?[0-9]+\\'" val)) (string-to-number val))
+   (t default)))
+
+(defun my/cat-file-tool (callback path &optional offset limit)
+  "Read the contents of file at PATH and return formatted lines with line numbers.
+CALLBACK is called with the result string.
 OFFSET is the line to start from (default 1).
 LIMIT is the maximum number of lines to read (default 2000)."
   (let ((default-directory (doom-project-root))
-        (offset (or offset 1))
-        (limit (or limit 2000))
-        ;; SAFETY: Prevent freezing on massive files (e.g., >10MB)
-        (max-size (* 3 1024 1024)))
+        (offset (my--coerce-number offset 1))
+        (limit (my--coerce-number limit 2000)))
     (cond
-     ((not (my--path-allowed-p path))
-      (format "Error: Access denied. '%s' is outside allowed directories." path))
      ((not (file-readable-p path))
-      (format "Error: File '%s' is not readable or does not exist." path))
-     ((> (file-attribute-size (file-attributes path)) max-size)
-      (format "Error: File '%s' is too large (%.2f MB). Limit is 3MB."
-              path (/ (file-attribute-size (file-attributes path)) 1048576.0)))
+      (funcall callback (format "Error: File '%s' is not readable or does not exist." path)))
      (t
-      (with-temp-buffer
-        (insert-file-contents path)
-        (let ((total-lines (max 1 (count-lines (point-min) (point-max)))))
-          (if (> offset total-lines)
-              (format "[Offset %d is beyond file length (%d lines)...]" offset total-lines)
-            (let ((end-line (min (+ offset limit -1) total-lines)))
-              (goto-char (point-min))
-              (when (> offset 1)
-                (forward-line (1- offset)))
-              (let ((start (point)))
-                (forward-line limit)
-                (let* ((lines (split-string (buffer-substring-no-properties start (point)) "\n"))
-                       ;; Eliminate the last empty line, if present
-                       (lines (if (and (> (length lines) 1) (string-empty-p (car (last lines))))
-                                  (butlast lines)
-                                lines))
-                       (line-num (1- offset))
-                       (content (mapconcat (lambda (line)
-                                             (format "%d:%s" (setq line-num (1+ line-num)) line))
-                                           lines
-                                           "\n")))
-                  (if (or (> offset 1) (< end-line total-lines))
-                      (format "%s\n[... File has %d lines. Showing lines %d-%d ...]"
-                              content total-lines offset end-line)
-                    content)))))))))))
+      (let* ((start offset)
+             (end (+ offset limit -1))
+             (abs-path (file-truename (expand-file-name path (doom-project-root))))
+             (script "NR >= start && NR <= end { print NR \":\" $0 }\nEND {\n  if (NR == 0) {\n    if (start > 1) {\n      printf \"[Offset %d is beyond file length (0 lines)...]\\n\", start\n    }\n  } else if (start > NR) {\n    printf \"[Offset %d is beyond file length (%d lines)...]\\n\", start, NR\n  } else {\n    end_line = (end < NR) ? end : NR\n    if (start > 1 || end < NR) {\n      printf \"[... File has %d lines. Showing lines %d-%d ...]\\n\", NR, start, end_line\n    }\n  }\n}")
+             (command (list "awk"
+                            "-v" (format "start=%d" start)
+                            "-v" (format "end=%d" end)
+                            script
+                            abs-path)))
+        (my--async-exec
+         "gptel-cat"
+         (my--wrap-sandbox-command command)
+         (lambda (exit-code output)
+           (if (zerop exit-code)
+               (funcall callback (string-trim-right output))
+             (funcall callback (format "Error reading file '%s' (exit code %d):\n%s" path exit-code output))))
+         nil
+         -1))))))
+
 
 (defun my/fd-tool (callback path &optional pattern depth include-hidden)
   "List files in PATH using `fd'. Respects .gitignore.
@@ -230,7 +296,7 @@ INCLUDE-HIDDEN is a boolean to include hidden files and directories."
     (if (not (file-exists-p full-path))
         (funcall callback (format "Error: Path '%s' does not exist." rel-path))
       (let* ((depth-val (cond
-                         ((and (integerp depth) (not (eq depth :json-false))) depth)
+                         ((and depth (not (eq depth :json-false))) (my--coerce-number depth 1))
                          ((and (not (null pattern)) (not (string-empty-p pattern))) -1)
                          ((and (or (null path) (eq path :json-false))) 1)
                          (t 1)))
@@ -253,7 +319,8 @@ GLOB is an optional glob pattern to filter files.
 CONTEXT is the number of lines of context to show.
 MAX-RESULTS is the maximum number of matches to return."
   (let* ((ignore-file (expand-file-name "~/.config/git/ignore"))
-         (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
+         (max-results (my--coerce-number max-results 50))
+         (context-num (my--coerce-number context 0))
          (command (list
                    "rg"
                    "--color=never"
@@ -264,7 +331,7 @@ MAX-RESULTS is the maximum number of matches to return."
                    "-n"
                    (when (file-exists-p ignore-file) (format "--ignore-file=%s" ignore-file))
                    (when (and (stringp glob) (not (string-empty-p glob))) (format "--glob=%s" glob))
-                   (when (and (integerp context) (> context 0)) (format "--context=%d" context))
+                   (when (> context-num 0) (format "--context=%d" context-num))
                    (when (> max-results 0) (format "--max-count=%d" max-results))
                    "--"
                    search-pattern
@@ -285,10 +352,10 @@ MAX-RESULTS is the maximum number of matches to return."
          (path (if (eq path :json-false) nil path))
          (full-path (expand-file-name (or path ".")))
          (rel-path (file-relative-name full-path)))
-    (let* ((depth-arg (if (and (integerp depth) (not (eq depth :json-false))) (format "--max-depth %d" depth) ""))
+    (let* ((depth-arg (if (and depth (not (eq depth :json-false))) (format "--max-depth %d" (my--coerce-number depth 1)) ""))
            (ignore-file (expand-file-name "~/.config/git/ignore"))
            (ignore-arg (if (file-exists-p ignore-file) (format "--ignore-file %s" (shell-quote-argument ignore-file)) ""))
-           (max-results (if (eq max-results :json-false) 50 (or max-results 50)))
+           (max-results (my--coerce-number max-results 50))
            (max-lines-arg (if (>= max-results 0) (format " | head -n %s" (shell-quote-argument (number-to-string max-results))) ""))
            (command (format "rg %s --files %s %s | fzf --ansi --filter=%s %s %s"
                             ignore-arg
@@ -303,6 +370,81 @@ MAX-RESULTS is the maximum number of matches to return."
         (list shell-file-name shell-command-switch command))
        (lambda (_code out) (funcall callback (if (string-empty-p out) "No matches found" out)))))))
 
+(defun my--clean-patch-string (patch)
+  "Clean markdown code blocks or surrounding wrapper text from PATCH string."
+  (let ((str patch))
+    (when (string-match "\\`[[:space:]\n]*```[a-zA-Z0-9_-]*\n" str)
+      (setq str (substring str (match-end 0))))
+    (when (string-match "\n```[[:space:]\n]*\\'" str)
+      (setq str (substring str 0 (match-beginning 0))))
+    (if (string-suffix-p "\n" str) str (concat str "\n"))))
+
+(defun my--split-patch-by-file (patch)
+  "Split multi-file PATCH string into a list of single-file patch strings."
+  (let ((lines (split-string patch "\n"))
+        (file-patches nil)
+        (current-lines nil))
+    (dolist (line lines)
+      (if (and (string-prefix-p "--- " line)
+               (cl-some (lambda (l) (string-prefix-p "+++ " l)) current-lines))
+          (progn
+            (push (concat (string-join (nreverse current-lines) "\n") "\n") file-patches)
+            (setq current-lines (list line)))
+        (push line current-lines)))
+    (when current-lines
+      (let ((p (string-trim-right (string-join (nreverse current-lines) "\n"))))
+        (unless (string-empty-p p)
+          (push (concat p "\n") file-patches))))
+    (nreverse file-patches)))
+
+(defun my--normalize-patch-string (patch)
+  "Normalize PATCH string by adding missing '+' or ' ' line prefixes in hunks."
+  (let ((subpatches (my--split-patch-by-file patch))
+        (norm-subpatches nil))
+    (dolist (subpatch subpatches)
+      (let* ((raw-lines (split-string subpatch "\n"))
+             (lines (if (and (string-suffix-p "\n" subpatch)
+                             (equal (car (last raw-lines)) ""))
+                        (butlast raw-lines)
+                      raw-lines))
+             (is-new-file (cl-some (lambda (l)
+                                     (or (string-prefix-p "--- /dev/null" l)
+                                         (string-prefix-p "---  /dev/null" l)))
+                                   lines))
+             (in-hunk nil)
+             (norm-lines nil))
+        (dolist (line lines)
+          (cond
+           ((or (string-prefix-p "--- " line) (string-prefix-p "+++ " line))
+            (setq in-hunk nil)
+            (push line norm-lines))
+           ((string-prefix-p "@@" line)
+            (setq in-hunk t)
+            (push line norm-lines))
+           (in-hunk
+            (if is-new-file
+                (cond
+                 ((string-prefix-p "+" line) (push line norm-lines))
+                 ((string-prefix-p " " line) (push (concat "+" (substring line 1)) norm-lines))
+                 (t (push (concat "+" line) norm-lines)))
+              (cond
+               ((or (string-prefix-p "+" line)
+                    (string-prefix-p "-" line)
+                    (string-prefix-p " " line)
+                    (string-prefix-p "\\" line)
+                    (string-prefix-p "@" line))
+                (push line norm-lines))
+               ((string-empty-p line)
+                (push " " norm-lines))
+               (t
+                (push (concat " " line) norm-lines)))))
+           (t
+            (push line norm-lines))))
+        (let ((result (string-trim-right (string-join (nreverse norm-lines) "\n"))))
+          (unless (string-empty-p result)
+            (push (concat result "\n") norm-subpatches)))))
+    (string-join (nreverse norm-subpatches) "")))
+
 (defun my--get-files-from-patch (patch)
   "Extract file paths from PATCH string."
   (let ((files nil)
@@ -314,33 +456,81 @@ MAX-RESULTS is the maximum number of matches to return."
             (push file files)))))
     (delete-dups (nreverse files))))
 
+(defun my--prepare-new-files-for-patch (patch root)
+  "If PATCH creates a new file (source /dev/null), remove existing file if present."
+  (let ((lines (split-string patch "\n")))
+    (dotimes (i (1- (length lines)))
+      (let ((line1 (nth i lines))
+            (line2 (nth (1+ i) lines)))
+        (when (and (string-match "^---\\s-+/dev/null" line1)
+                   (string-match "^\\+\\+\\+\\s-+\\(?:b/\\)?\\(.+\\)$" line2))
+          (let* ((rel-file (match-string 1 line2))
+                 (abs-file (expand-file-name rel-file root)))
+            (when (and (not (equal rel-file "/dev/null"))
+                       (file-exists-p abs-file))
+              (ignore-errors (delete-file abs-file)))))))))
+
+(defun my--edit-tool-finish (callback files root out)
+  "Finish edit tool execution, running diagnostics if buffers are visiting FILES."
+  (let ((visiting-bufs (my--get-visiting-buffers files root)))
+    (if (null visiting-bufs)
+        (funcall callback out)
+      (run-with-timer
+       my/custom-gptel-edit-diagnostic-delay nil
+       (lambda ()
+         (let ((diag-reports nil))
+           (dolist (file files)
+             (let ((diags (my--get-diagnostics-for-file file root)))
+               (when diags
+                 (push (format "File `%s` diagnostics:\n%s" file diags) diag-reports))))
+           (if diag-reports
+               (funcall callback (format "%s\n\nWARNING: Post-patch compilation/linting errors found:\n%s"
+                                         out
+                                         (mapconcat #'identity (nreverse diag-reports) "\n\n")))
+             (funcall callback out))))))))
+
 (defun my/edit-tool (callback patch)
-  "Apply PATCH using git apply and call CALLBACK with the result."
-  (let* ((patch-content (if (string-suffix-p "\n" patch) patch (concat patch "\n")))
-         (command '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--allow-empty" "--" "-"))
-         (files (my--get-files-from-patch patch)))
-    (my--async-exec
-     "gptel-git-apply"
-     (my--wrap-sandbox-command command)
-     (lambda (code out)
-       (if (not (zerop code))
-           (funcall callback (format "Error applying patch (exit code %d):\n%s" code out))
-         ;; Patch applied successfully. Wait 1.5 seconds for flycheck/LSP to update diagnostics.
-         (run-with-timer
-          1.5 nil
-          (lambda ()
-            (let ((diag-reports nil))
-              (dolist (file files)
-                (let ((diags (my--get-diagnostics-for-file file)))
-                  (when diags
-                    (push (format "File `%s` diagnostics:\n%s" file diags) diag-reports))))
-              (if diag-reports
-                  (funcall callback (format "%s\n\nWARNING: Post-patch compilation/linting errors found:\n%s"
-                                            out
-                                            (mapconcat #'identity (nreverse diag-reports) "\n\n")))
-                (funcall callback out)))))))
-     patch-content
-     -1)))
+  "Apply PATCH using git apply (with patch fallback) and call CALLBACK with the result.
+Normalizes patch formatting and applies multi-file patches per-file."
+  (let* ((root (doom-project-root))
+         (clean-patch (my--clean-patch-string patch))
+         (norm-patch (my--normalize-patch-string clean-patch))
+         (files (my--get-files-from-patch norm-patch))
+         (subpatches (my--split-patch-by-file norm-patch)))
+    (my--prepare-new-files-for-patch norm-patch root)
+    (let ((outputs nil)
+          (apply-next nil))
+      (setq apply-next
+            (lambda (remaining-patches)
+              (if (null remaining-patches)
+                  (let ((combined-out (string-trim-right (string-join (nreverse outputs) "\n"))))
+                    (my--edit-tool-finish callback files root combined-out))
+                (let* ((subpatch (car remaining-patches))
+                       (git-cmd '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--allow-empty" "--" "-")))
+                  (my--async-exec
+                   "gptel-git-apply"
+                   (my--wrap-sandbox-command git-cmd)
+                   (lambda (code out)
+                     (if (zerop code)
+                         (progn
+                           (push out outputs)
+                           (funcall apply-next (cdr remaining-patches)))
+                       ;; Fallback to GNU patch command if git apply fails
+                       (let ((patch-cmd '("patch" "-p1" "--forward" "--reject-file=-")))
+                         (my--async-exec
+                          "gptel-patch-fallback"
+                          (my--wrap-sandbox-command patch-cmd)
+                          (lambda (p-code p-out)
+                            (if (zerop p-code)
+                                (progn
+                                  (push p-out outputs)
+                                  (funcall apply-next (cdr remaining-patches)))
+                              (funcall callback (format "Error applying patch (exit code %d):\n%s" code out))))
+                          subpatch
+                          -1))))
+                   subpatch
+                   -1)))))
+      (funcall apply-next subpatches))))
 
 (defun my/shell-tool (callback command)
   "Run COMMAND in a shell and call CALLBACK with the result."
@@ -416,11 +606,11 @@ MAX-RESULTS is the maximum number of matches to return."
 (defun my/ast-grep-tool (callback command &optional path pattern language inline-rules extra-args)
   "Run ast-grep with the specified COMMAND and arguments asynchronously.
 CALLBACK is called with the result string.
-COMMAND is 'run', 'scan', or 'outline'.
+COMMAND is `run', `scan', or `outline'.
 PATH is the relative target path (defaults to project root).
 PATTERN is the pattern string to match.
 LANGUAGE is the language of the codebase.
-INLINE-RULES is the inline YAML rules configuration for 'scan'.
+INLINE-RULES is the inline YAML rules configuration for `scan'.
 EXTRA-ARGS is an optional list of extra string flags."
   (let* ((ast-grep-bin (executable-find "ast-grep")))
     (if (not ast-grep-bin)
@@ -428,46 +618,42 @@ EXTRA-ARGS is an optional list of extra string flags."
       (let* ((root (doom-project-root))
              (target-path (expand-file-name (or path ".") root))
              (rel-target (file-relative-name target-path root)))
-        (cond
-         ((not (my--path-allowed-p target-path))
-          (funcall callback (format "Error: Access denied. '%s' is outside allowed directories." rel-target)))
-         (t
-          (let* ((cmd-args (list "ast-grep" command))
-                 ;; Formulate parameters based on command
-                 (cmd-args
-                  (pcase command
-                    ("run"
-                     (append cmd-args
-                             (when (and pattern (not (string-empty-p pattern)))
-                               (list "--pattern" pattern))
-                             (when (and language (not (string-empty-p language)))
-                               (list "--lang" language))
-                             (list rel-target)))
-                    ("scan"
-                     (append cmd-args
-                             (when (and inline-rules (not (string-empty-p inline-rules)))
-                               (list "--inline-rules" inline-rules))
-                             (list rel-target)))
-                    ("outline"
-                     (append cmd-args
-                             (when (and pattern (not (string-empty-p pattern)))
-                               (list "--match" pattern))
-                             (list rel-target)))
-                    (_ (append cmd-args (list rel-target)))))
-                 ;; Append extra-args if any
-                 (cmd-args (append cmd-args (and extra-args (append extra-args nil)))))
-            (my--async-exec
-             "gptel-ast-grep"
-             (my--wrap-sandbox-command cmd-args)
-             (lambda (code out)
-               (cond
-                ((not (zerop code))
-                 (funcall callback (format "ast-grep failed (exit code %d):\n%s" code out)))
-                ((string-empty-p out)
-                 (funcall callback "No matches/structure found."))
-                (t
-                 (funcall callback out))))))))))))
- 
+        (let* ((cmd-args (list "ast-grep" command))
+               ;; Formulate parameters based on command
+               (cmd-args
+                (pcase command
+                  ("run"
+                   (append cmd-args
+                           (when (and pattern (not (string-empty-p pattern)))
+                             (list "--pattern" pattern))
+                           (when (and language (not (string-empty-p language)))
+                             (list "--lang" language))
+                           (list rel-target)))
+                  ("scan"
+                   (append cmd-args
+                           (when (and inline-rules (not (string-empty-p inline-rules)))
+                             (list "--inline-rules" inline-rules))
+                           (list rel-target)))
+                  ("outline"
+                   (append cmd-args
+                           (when (and pattern (not (string-empty-p pattern)))
+                             (list "--match" pattern))
+                           (list rel-target)))
+                  (_ (append cmd-args (list rel-target)))))
+               ;; Append extra-args if any
+               (cmd-args (append cmd-args (and extra-args (append extra-args nil)))))
+          (my--async-exec
+           "gptel-ast-grep"
+           (my--wrap-sandbox-command cmd-args)
+           (lambda (code out)
+             (cond
+              ((not (zerop code))
+               (funcall callback (format "ast-grep failed (exit code %d):\n%s" code out)))
+              ((string-empty-p out)
+               (funcall callback "No matches/structure found."))
+              (t
+               (funcall callback out))))))))))
+
 (defconst my/gptel-custom-tools
   '((:name "skill"
      :function my/skill-tool
@@ -518,6 +704,7 @@ EXTRA-ARGS is an optional list of extra string flags."
      :function my/cat-file-tool
      :category "filesystem"
      :description "Read the content of a file with line numbers in N:line format. To paginate over the file, use the `limit' and `offset' parameters in subsequent `cat' calls"
+     :async t
      :args ((:name "path" :type string :description "Path to the file to read.")
             (:name "offset" :type integer :description "Line number to start reading from (1-based). Default: 1." :optional t)
             (:name "limit" :type integer :description "Maximum number of lines to return. Default: 2000." :optional t)))
