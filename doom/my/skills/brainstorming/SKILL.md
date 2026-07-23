@@ -22,11 +22,12 @@ Execute steps sequentially:
 7. **User Final Review**: Ask user to review written spec. Refine if changes are requested.
 8. **Transition**: Invoke `writing-plans` skill to generate implementation plan (the only allowed transition skill).
 
-## Decision-Tree Protocol
+## Decision-Tree Interrogation Protocol
 
+- **Environment Fact-Checking First**: Before asking the user any questions, automatically inspect the filesystem, tools, git history, and configs. Discover facts independently—only ask the user for *decisions*, never for facts that can be queried.
 - **One Question at a Time**: Never overwhelm the user with multiple questions in a single response.
-- **Provide Concrete Options**: Always suggest 2-4 structured choices (A, B, C...) with default recommendations to reduce decision fatigue.
-- **Decision-Tree Probing**: Use choices to narrow down problem space sequentially, following up based on selected branch.
+- **Provide Concrete Options with Recommendations**: Always suggest 2-4 structured choices (A, B, C...) and prefix your top choice with `(Recommended)` along with a concise justification to minimize user decision fatigue.
+- **Decision-Tree Probing**: Use choices to narrow down problem space sequentially, probing edge cases, failure states, and unstated assumptions before proceeding.
 
 ## Architecture & Codebase Design Principles
 

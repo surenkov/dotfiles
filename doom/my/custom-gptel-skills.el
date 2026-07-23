@@ -185,8 +185,7 @@ Iterates from lowest to highest priority to allow proper shadowing."
          (t
           (let* ((all-files (directory-files-recursively skill-dir-expanded ".*" nil nil nil))
                  (skill-files (cl-loop for fp in all-files
-                                       when (and (my/gptel--path-in-dirs-p fp allowed-dirs)
-                                                 (not (string-suffix-p "SKILL.md" fp)))
+                                       when (my/gptel--path-in-dirs-p fp allowed-dirs)
                                        collect (cons (file-relative-name fp skill-dir-expanded) fp)))
                  (sorted-skill-files (sort skill-files (lambda (a b) (> (length (car a)) (length (car b))))))
                  (body (with-temp-buffer
@@ -203,9 +202,11 @@ Iterates from lowest to highest priority to allow proper shadowing."
                   (let ((start (point)))
                     (insert body)
                     (pcase-dolist (`(,rel-path . ,full-path) sorted-skill-files)
-                      (let ((regexp (concat "\\(?:^\\|[^a-zA-Z0-9_./-]\\)\\(?:\\.\\./\\|\\./\\)?\\("
-                                            (regexp-quote rel-path)
-                                            "\\)\\(?:$\\|[^a-zA-Z0-9_.-]\\)")))
+                      (let* ((prefix-regex "\\(?:file:///\\|file://\\|file:\\|@\\(?:\\.\\./\\|\\./\\|/\\)?\\|\\(?:\\.\\./\\)+\\|\\./\\|/\\)?")
+                             (regexp (concat "\\(?:^\\|[^a-zA-Z0-9_./-]\\)\\("
+                                             prefix-regex
+                                             (regexp-quote rel-path)
+                                             "\\)\\(?:$\\|[^a-zA-Z0-9_./-]\\|\\.\\(?:$\\|[^a-zA-Z0-9_-]\\)\\)")))
                         (goto-char start)
                         (while (re-search-forward regexp nil t)
                           (replace-match (expand-file-name full-path) t t nil 1)))))

@@ -12,10 +12,10 @@ description: Use when encountering any bug, test failure, or unexpected behavior
 
 ## Process: The Four Phases
 
-### Phase 1: Root Cause Investigation
+### Phase 1: Root Cause Investigation & Red-Capable Command Gate
 1. **Read Errors Carefully:** Examine complete stack traces, line numbers, file paths, and error codes.
-2. **Reproduce Consistently:** Establish reliable trigger steps. Gather data if non-reproducible; do not guess.
-3. **Check Recent Changes:** Analyze `git diff`, recent commits, dependencies, configurations, and environment differences.
+2. **Reproduce Consistently & Red-Capable Command Requirement:** Establish reliable trigger steps. You **MUST** construct a single, fast, deterministic, agent-runnable command that is *Red-Capable* (proven to fail on the bug right now, and will pass when fixed). Do not proceed to code analysis or hypothesis testing until this command exists and fails.
+3. **Check Recent Changes & Minimization:** Shrink the reproduction to minimal load-bearing components (cutting inputs/callers one by one). Analyze `git diff`, recent commits, dependencies, configurations, and environment differences.
 4. **Multi-Component Instrumentation:**
    * **Boundary Rule:** Log inputs/outputs at component boundaries, verify config propagation, and inspect state before proposing fixes.
    * **`[DEBUG-xxxx]` Tag Mandate:** Tag temporary logs with a unique session identifier (e.g., `[DEBUG-8f2a]`) to allow clean searching (`grep -rn "DEBUG-"`) and effortless removal before committing.
@@ -56,22 +56,27 @@ Construct a deterministic, high-efficiency feedback loop using one of these 10 s
 4. **Analyze Dependencies:** Identify environmental and configuration assumptions.
 
 ### Phase 3: Hypothesis and Testing
-1. **Multi-Hypothesis Ranking Mandate:** Generate 3 to 5 distinct, falsifiable hypotheses ("X causes Y because of Z") before testing any changes.
-2. **Rank Hypotheses:** Order by probability and verification cost (effort/time). Document the list clearly.
-3. **Test Minimally in Ranked Order:** Test the highest-ranked hypothesis using the smallest isolated change. Change one variable at a time.
-4. **Verify/Reset:** If successful, proceed to Phase 4. If failed, revert changes completely, eliminate the hypothesis, move to the next ranked hypothesis, and repeat. Do not accumulate speculative fixes.
-5. **Acknowledge Ignorance:** Explicitly state unknown factors; research or ask for help rather than guessing.
+1. **Multi-Hypothesis Ranking Mandate:** Generate 3 to 5 distinct, falsifiable hypotheses before testing any changes.
+2. **Falsifiable Format:** Write hypotheses explicitly as `"If X is the cause, changing Y will make bug disappear / changing Z will make it worse"`.
+3. **Rank Hypotheses:** Order by probability and verification cost (effort/time). Document the list clearly.
+4. **Test Minimally in Ranked Order:** Test the highest-ranked hypothesis using the smallest isolated change. Change one variable at a time.
+5. **Verify/Reset:** If successful, proceed to Phase 4. If failed, revert changes completely, eliminate the hypothesis, move to the next ranked hypothesis, and repeat. Do not accumulate speculative fixes.
+6. **Acknowledge Ignorance:** Explicitly state unknown factors; research or ask for help rather than guessing.
 
-### Phase 4: Implementation
-1. **Failing Test Case:** Write an automated, minimal reproduction test (see `superpowers:test-driven-development`).
+### Phase 4: Implementation & Verification
+1. **Failing Test Case (Test Seam):** Write an automated, minimal reproduction test at the highest appropriate call-site seam (see `superpowers:test-driven-development`).
 2. **Single Fix:** Resolve root cause with one focused change. Avoid bundled refactoring or unrelated edits.
-3. **Verify:** Confirm the fix passes and regressions are zero (see `superpowers:verification-before-completion`).
+3. **Verify with Red-Capable Command:** Confirm the Red-Capable command passes and regressions are zero (see `superpowers:verification-before-completion`).
 4. **Failure Threshold (3-Fix Limit):**
    * **< 3 fixes failed:** Revert, return to Phase 1, and re-analyze.
    * **≥ 3 fixes failed:** **STOP immediately.** Do not attempt fix #4. Proceed to step 5.
 5. **Architectural Analysis:** If 3+ fixes fail, the issue is architectural rather than local.
    * *Indicators:* Fixes reveal coupling, require massive refactoring, or cause regressions elsewhere.
    * *Action:* Halt, re-evaluate pattern soundness, and consult with your human partner before writing more code.
+
+### Phase 5: Post-Mortem & Prevention Review
+1. **Root Cause Retrospective:** Ask: *"What structural or testing gap allowed this bug to exist undetected?"*
+2. **Prevention Handoff:** Log architectural debt or missing test seams discovered during debugging for follow-up via `domain-modeling` or `codebase-design`.
 
 ## Diagnostics & Red Flags
 

@@ -11,10 +11,15 @@ Write precise, exhaustive implementation plans assuming the implementer has zero
 
 ## Core Principles
 
-1. **Scope Division**: Divide multi-subsystem specs into separate plans (one per subsystem). Each plan must produce working, testable software.
-2. **File Structure Mapping**: Map files to be created/modified with exact responsibilities before detailing tasks. Require deep modules with clear testable seams rather than shallow pass-through wrappers. Prioritize small, focused files with single, clear responsibilities.
-3. **Bite-Sized Steps**: Break tasks into 2-5 minute steps (Write failing test -> Run to verify failure -> Write implementation -> Verify pass -> Commit).
-4. **No Placeholders**: Never use "TODO", "TBD", "implement later", vague commands ("add error handling"), or "similar to Task N" shortcuts. Every code change, test, and command must be fully written out.
+1. **Scope Division & Tracer-Bullet Slicing**: Divide multi-subsystem specs into tracer bullets (thin, end-to-end vertical slices connecting all layers, from interface to storage). Each task must produce working, testable software.
+2. **Explicit Dependency Edges**: State blocking dependencies explicitly for each task (`Blocked by: Task N`, `Blocks: Task M`) to clarify execution frontiers.
+3. **Expand–Contract Refactoring Pattern**: For wide refactors across multiple callers:
+   * **Expand**: Introduce the new interface/behavior alongside the old, preserving backward compatibility.
+   * **Migrate**: Update callers and tests in blast-radius-limited, atomic batches.
+   * **Contract**: Deprecate and remove the old implementation only after all callers have migrated and verified.
+4. **File Structure Mapping**: Map files to be created/modified with exact responsibilities before detailing tasks. Require deep modules with clear testable seams rather than shallow pass-through wrappers. Prioritize small, focused files with single, clear responsibilities.
+5. **Bite-Sized Steps**: Break tasks into 2-5 minute steps (Write failing test -> Run to verify failure -> Write implementation -> Verify pass -> Commit).
+6. **No Placeholders**: Never use "TODO", "TBD", "implement later", vague commands ("add error handling"), or "similar to Task N" shortcuts. Every code change, test, and command must be fully written out.
 
 ## Plan File Format
 

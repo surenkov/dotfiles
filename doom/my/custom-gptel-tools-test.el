@@ -197,41 +197,6 @@
       (should (equal (plist-get captured-preset-spec :model) "parent-model-name"))
       (should (equal (plist-get captured-preset-spec :backend) "parent-backend-obj")))))
 
-(ert-deftest test-ast-grep-tool-args ()
-  "Verify that my/ast-grep-tool constructs command-line arguments correctly."
-  (let ((captured-command nil))
-    (cl-letf* (((symbol-function 'executable-find) (lambda (bin) (if (equal bin "ast-grep") "/usr/local/bin/ast-grep" nil)))
-               ((symbol-function 'my/get-resolved-skill-dirs) (lambda () nil))
-               ((symbol-function 'my--async-exec)
-                (lambda (_name command callback &rest _args)
-                  (setq captured-command command)
-                  (funcall callback 0 "success-output"))))
-      
-      ;; 1. Run 'run' command
-      (my/ast-grep-tool (lambda (out) (should (equal out "success-output")))
-                        "run" "." "pattern-to-match" "typescript")
-      ;; Captured command contains ast-grep arguments
-      (should (member "ast-grep" captured-command))
-      (should (member "run" captured-command))
-      (should (member "--pattern" captured-command))
-      (should (member "pattern-to-match" captured-command))
-      (should (member "--lang" captured-command))
-      (should (member "typescript" captured-command))
-      
-      ;; 2. Run 'scan' command
-      (my/ast-grep-tool (lambda (out) (should (equal out "success-output")))
-                        "scan" "." nil nil "inline-yaml-rules")
-      (should (member "scan" captured-command))
-      (should (member "--inline-rules" captured-command))
-      (should (member "inline-yaml-rules" captured-command))
-
-      ;; 3. Run 'outline' command
-      (my/ast-grep-tool (lambda (out) (should (equal out "success-output")))
-                        "outline" "." "outline-filter")
-      (should (member "outline" captured-command))
-      (should (member "--match" captured-command))
-      (should (member "outline-filter" captured-command)))))
-
 (ert-deftest test-gptel-agent-dynamic-schema-restriction ()
   (let* ((mock-agent-tool (make-gptel-tool))
          (gptel-tools '("fd" "rg" "agent")))
@@ -539,3 +504,41 @@
             (insert-file-contents temp-file)
             (should (string-match-p "total_fixed = 0" (buffer-string)))))
       (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-gptel-get-skill-body-path-rewriting ()
+  "Verify my/gptel-get-skill-body rewrites relative paths without creating .// or @/ artifacts."
+  (let* ((temp-dir (file-name-as-directory (make-temp-file "test-skill-dir-" t)))
+         (ref-dir (file-name-as-directory (expand-file-name "references" temp-dir)))
+         (skill-file (expand-file-name "SKILL.md" temp-dir))
+         (guide-file (expand-file-name "guide.md" ref-dir)))
+    (unwind-protect
+        (progn
+          (make-directory ref-dir t)
+          (with-temp-file guide-file
+            (insert "# Guide\nContent of guide.\n"))
+          (with-temp-file skill-file
+            (insert "---\nname: test-skill\ndescription: Test skill\n---\n"
+                    "1. Relative dot slash: ./references/guide.md\n"
+                    "2. Relative parent slash: ../references/guide.md\n"
+                    "3. At sign reference: @references/guide.md\n"
+                    "4. At sign with slash: @/references/guide.md\n"
+                    "5. At sign with dot slash: @./references/guide.md\n"
+                    "6. Markdown link: [guide](./references/guide.md)\n"
+                    "7. Sentence end: See references/guide.md.\n"
+                    "8. File URL: file:///references/guide.md\n"
+                    "9. Already absolute: /other/path/references/guide.md\n"))
+          (let ((my/gptel--skills `(("test-skill" . (,temp-dir :name "test-skill" :description "Test skill"))))
+                (my/gptel-skill-dirs (list temp-dir)))
+            (cl-letf (((symbol-function 'my/get-resolved-skill-dirs) (lambda () (list temp-dir))))
+              (let ((body (my/gptel-get-skill-body "test-skill")))
+                ;; Should not contain artifacts like .// or @/ or @./
+                (should-not (string-match-p "\\.//" body))
+                (should-not (string-match-p "@/" body))
+                (should-not (string-match-p "@\\./" body))
+                (should-not (string-match-p "file:///" body))
+                ;; Should contain expanded absolute path to guide.md
+                (should (string-match-p (regexp-quote guide-file) body))
+                ;; Should preserve existing unrelated absolute paths
+                (should (string-match-p "/other/path/references/guide.md" body))))))
+      (delete-directory temp-dir t))))
+

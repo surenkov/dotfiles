@@ -95,7 +95,14 @@ These are timing/race condition issues. Your task:
 
 Do NOT just increase timeouts - find the real issue.
 
-Return: Summary of what you found and what you fixed.
+Return: Summary of root cause, changes made, and a standardized **Subagent State Handoff** block:
+```markdown
+### Subagent State Handoff
+- **Current State:** [1-2 sentence snapshot of active execution state]
+- **Completed Tasks:** [Concise list of completed checklist items & changes]
+- **Next Steps:** [Actionable items for controller or next task]
+- **Key References:** [Relative file paths and line ranges modified/created]
+```
 ```
 
 ## Background Research & Fact-Finding Archetype

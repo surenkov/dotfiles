@@ -27,11 +27,23 @@ Execute implementation plans sequentially in a single session by delegating inde
    - **Checkpoint:** Mark complete, commit changes, proceed immediately to next task.
 3. **Wrap-up:** Perform final codebase review.
 
-## Implementer Statuses
+## Implementer Statuses & Handoff Protocol
+
+### Implementer Statuses
 - **DONE:** Proceed directly to Spec Compliance review.
 - **DONE_WITH_CONCERNS:** Evaluate concerns; resolve scope/correctness issues before review, otherwise proceed to review.
 - **NEEDS_CONTEXT:** Provide missing details and re-dispatch.
 - **BLOCKED:** Do not force retries. Provide context, upgrade model capacity, or escalate plan defects to human.
+
+### Subagent State Handoff & Compaction Protocol
+When a subagent completes a task, encounters concerns, or passes review, it **MUST** compact its state into a standardized handoff block:
+```markdown
+### Subagent State Handoff
+- **Current State:** [1-2 sentence snapshot of active execution state]
+- **Completed Tasks:** [Concise list of completed checklist items & changes]
+- **Next Steps:** [Actionable items for controller or next task]
+- **Key References:** [Relative file paths and line ranges modified/created]
+```
 
 ## Prompt Templates
 - `./implementer-prompt.md` - Task implementation.
