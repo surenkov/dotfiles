@@ -265,7 +265,7 @@ LIMIT is the maximum number of lines to read (default 2000)."
       (let* ((start offset)
              (end (+ offset limit -1))
              (abs-path (file-truename (expand-file-name path (doom-project-root))))
-             (script "NR >= start && NR <= end { print NR \":\" $0 }\nEND {\n  if (NR == 0) {\n    if (start > 1) {\n      printf \"[Offset %d is beyond file length (0 lines)...]\\n\", start\n    }\n  } else if (start > NR) {\n    printf \"[Offset %d is beyond file length (%d lines)...]\\n\", start, NR\n  } else {\n    end_line = (end < NR) ? end : NR\n    if (start > 1 || end < NR) {\n      printf \"[... File has %d lines. Showing lines %d-%d ...]\\n\", NR, start, end_line\n    }\n  }\n}")
+             (script "NR >= start && NR <= end { print $0 }\nEND {\n  if (NR == 0) {\n    if (start > 1) {\n      printf \"[Offset %d is beyond file length (0 lines)...]\\n\", start\n    }\n  } else if (start > NR) {\n    printf \"[Offset %d is beyond file length (%d lines)...]\\n\", start, NR\n  } else {\n    end_line = (end < NR) ? end : NR\n    if (start > 1 || end < NR) {\n      printf \"[... File has %d lines. Showing lines %d-%d ...]\\n\", NR, start, end_line\n    }\n  }\n}")
              (command (list "awk"
                             "-v" (format "start=%d" start)
                             "-v" (format "end=%d" end)
@@ -949,7 +949,7 @@ EXTRA-ARGS is an optional list of extra string flags."
     (:name "cat"
      :function my/cat-file-tool
      :category "filesystem"
-     :description "Read the content of a file with line numbers in N:line format. To paginate over the file, use the `limit' and `offset' parameters in subsequent `cat' calls"
+     :description "Read the content of a file. To paginate over large files, use the `limit' and `offset' parameters in subsequent `cat' calls."
      :async t
      :args ((:name "path" :type string :description "Path to the file to read.")
             (:name "offset" :type integer :description "Line number to start reading from (1-based). Default: 1." :optional t)
