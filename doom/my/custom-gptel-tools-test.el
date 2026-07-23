@@ -391,106 +391,106 @@
       (when (buffer-live-p buf) (kill-buffer buf))
       (delete-file temp-file))))
 
+(defun my-test--edit-tool (path old new &optional replace-all)
+  "Synchronous test helper for `my/edit-tool`."
+  (let ((result nil)
+        (done nil)
+        (my/custom-gptel-sandbox-profile-path nil))
+    (my/edit-tool (lambda (res)
+                    (setq result res)
+                    (setq done t))
+                  path old new replace-all)
+    (with-timeout (5.0 (error "Timed out waiting for my/edit-tool callback"))
+      (while (not done)
+        (accept-process-output nil 0.05)))
+    result))
+
 (ert-deftest test-edit-tool-basic-replace ()
   "Verify my/edit-tool performs exact string replacement in an existing file."
-  (let* ((temp-file (make-temp-file "test-edit-basic-"))
-         (res nil))
+  (let* ((temp-file (make-temp-file "test-edit-basic-")))
     (unwind-protect
         (progn
           (with-temp-file temp-file
             (insert "hello world\nline 2\nline 3\n"))
-          (my/edit-tool (lambda (out) (setq res out))
-                        temp-file "line 2" "line two")
-          (should (string-match-p "Edited file successfully" res))
+          (let ((res (my-test--edit-tool temp-file "line 2" "line two")))
+            (should (string-match-p "Edited file successfully" res)))
           (with-temp-buffer
             (insert-file-contents temp-file)
             (should (equal (buffer-string) "hello world\nline two\nline 3\n"))))
       (when (file-exists-p temp-file) (delete-file temp-file)))))
 
 (ert-deftest test-edit-tool-create-new-file ()
-  "Verify my/edit-tool creates a new file when oldString is empty."
+  "Verify my/edit-tool creates a new file when old is empty."
   (let* ((temp-dir (make-temp-file "test-edit-dir-" t))
-         (target (expand-file-name "nested/dir/new.txt" temp-dir))
-         (res nil))
+         (target (expand-file-name "nested/dir/new.txt" temp-dir)))
     (unwind-protect
         (progn
-          (my/edit-tool (lambda (out) (setq res out))
-                        target "" "created content")
-          (should (string-match-p "Edited file successfully" res))
+          (let ((res (my-test--edit-tool target "" "created content")))
+            (should (string-match-p "Edited file successfully" res)))
           (should (file-exists-p target))
           (with-temp-buffer
             (insert-file-contents target)
             (should (equal (buffer-string) "created content"))))
       (delete-directory temp-dir t))))
 
-(ert-deftest test-edit-tool-reject-empty-oldstring-on-existing-file ()
-  "Verify my/edit-tool rejects empty oldString when target file exists."
-  (let* ((temp-file (make-temp-file "test-edit-empty-"))
-         (res nil))
+(ert-deftest test-edit-tool-reject-empty-old-on-existing-file ()
+  "Verify my/edit-tool rejects empty old when target file exists."
+  (let* ((temp-file (make-temp-file "test-edit-empty-")))
     (unwind-protect
         (progn
           (with-temp-file temp-file (insert "original"))
-          (my/edit-tool (lambda (out) (setq res out))
-                        temp-file "" "replacement")
-          (should (string-match-p "oldString cannot be empty" res))
+          (let ((res (my-test--edit-tool temp-file "" "replacement")))
+            (should (string-match-p "cannot be empty" res)))
           (with-temp-buffer
             (insert-file-contents temp-file)
             (should (equal (buffer-string) "original"))))
       (when (file-exists-p temp-file) (delete-file temp-file)))))
 
 (ert-deftest test-edit-tool-reject-identical-strings ()
-  "Verify my/edit-tool fails if oldString and newString are identical."
-  (let* ((temp-file (make-temp-file "test-edit-same-"))
-         (res nil))
+  "Verify my/edit-tool fails if old and new are identical."
+  (let* ((temp-file (make-temp-file "test-edit-same-")))
     (unwind-protect
         (progn
           (with-temp-file temp-file (insert "content"))
-          (my/edit-tool (lambda (out) (setq res out))
-                        temp-file "same" "same")
-          (should (string-match-p "identical" res)))
+          (let ((res (my-test--edit-tool temp-file "same" "same")))
+            (should (string-match-p "identical" res))))
       (when (file-exists-p temp-file) (delete-file temp-file)))))
 
 (ert-deftest test-edit-tool-replace-all ()
-  "Verify my/edit-tool replaces all occurrences when replaceAll is t."
-  (let* ((temp-file (make-temp-file "test-edit-all-"))
-         (res nil))
+  "Verify my/edit-tool replaces all occurrences when replace-all is t."
+  (let* ((temp-file (make-temp-file "test-edit-all-")))
     (unwind-protect
         (progn
           (with-temp-file temp-file (insert "foo bar foo baz foo"))
-          (my/edit-tool (lambda (out) (setq res out))
-                        temp-file "foo" "qux" t)
-          (should (string-match-p "Edited file successfully" res))
+          (let ((res (my-test--edit-tool temp-file "foo" "qux" t)))
+            (should (string-match-p "Edited file successfully" res)))
           (with-temp-buffer
             (insert-file-contents temp-file)
             (should (equal (buffer-string) "qux bar qux baz qux"))))
       (when (file-exists-p temp-file) (delete-file temp-file)))))
 
 (ert-deftest test-edit-tool-multiple-matches-error ()
-  "Verify my/edit-tool signals an error when oldString occurs multiple times without replaceAll."
-  (let* ((temp-file (make-temp-file "test-edit-multi-"))
-         (res nil))
+  "Verify my/edit-tool signals an error when old occurs multiple times without replace-all."
+  (let* ((temp-file (make-temp-file "test-edit-multi-")))
     (unwind-protect
         (progn
           (with-temp-file temp-file (insert "foo bar foo"))
-          (my/edit-tool (lambda (out) (setq res out))
-                        temp-file "foo" "qux")
-          (should (string-match-p "Found multiple matches" res)))
+          (let ((res (my-test--edit-tool temp-file "foo" "qux")))
+            (should (string-match-p "Found multiple matches" res))))
       (when (file-exists-p temp-file) (delete-file temp-file)))))
 
 (ert-deftest test-edit-tool-line-trimmed-replacer ()
   "Verify my/edit-tool falls back to line-trimmed matching when whitespace differs."
-  (let* ((temp-file (make-temp-file "test-edit-trimmed-"))
-         (res nil))
+  (let* ((temp-file (make-temp-file "test-edit-trimmed-")))
     (unwind-protect
         (progn
           (with-temp-file temp-file
             (insert "def foo():\n    print('hello')\n    return 42\n"))
           ;; Search string has different leading whitespace
-          (my/edit-tool (lambda (out) (setq res out))
-                        temp-file
-                        "print('hello')\nreturn 42"
-                        "print('world')\nreturn 100")
-          (should (string-match-p "Edited file successfully" res))
+          (let ((res (my-test--edit-tool temp-file
+                                         "print('hello')\nreturn 42"
+                                         "print('world')\nreturn 100")))
+            (should (string-match-p "Edited file successfully" res)))
           (with-temp-buffer
             (insert-file-contents temp-file)
             (should (string-match-p "print('world')" (buffer-string)))))
@@ -498,17 +498,15 @@
 
 (ert-deftest test-edit-tool-crlf-line-endings ()
   "Verify my/edit-tool preserves CRLF line endings."
-  (let* ((temp-file (make-temp-file "test-edit-crlf-"))
-         (res nil))
+  (let* ((temp-file (make-temp-file "test-edit-crlf-")))
     (unwind-protect
         (progn
           (with-temp-buffer
             (insert "line1\r\nold text\r\nline3\r\n")
             (let ((coding-system-for-write 'no-conversion))
               (write-region (point-min) (point-max) temp-file nil 'silent)))
-          (my/edit-tool (lambda (out) (setq res out))
-                        temp-file "old text" "new text")
-          (should (string-match-p "Edited file successfully" res))
+          (let ((res (my-test--edit-tool temp-file "old text" "new text")))
+            (should (string-match-p "Edited file successfully" res)))
           (with-temp-buffer
             (insert-file-contents-literally temp-file)
             (should (equal (buffer-string) "line1\r\nnew text\r\nline3\r\n"))))
@@ -516,6 +514,28 @@
 
 (ert-deftest test-edit-tool-disproportionate-match-rejection ()
   "Verify my/edit-tool rejects replacement when match span is disproportionately large."
-  (let ((search "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8")
-        (old "line1\nline2"))
-    (should (my--edit-is-disproportionate-match search old))))
+  (let* ((temp-file (make-temp-file "test-edit-disprop-")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n"))
+          (let ((res (my-test--edit-tool temp-file "line1\nline8" "replacement")))
+            (should (string-match-p "Refusing replacement" res))))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-rg-anchor-matching ()
+  "Verify my/edit-tool uses rg anchor locating when search string has middle-line typos."
+  (let* ((temp-file (make-temp-file "test-edit-rg-")))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert "def calculate_total(items):\n    total_amount = 0\n    for item in items:\n        total_amount += item.price\n    return total_amount\n"))
+          ;; Search string has typo in middle line 'total_typo = 0'
+          (let ((res (my-test--edit-tool temp-file
+                                         "def calculate_total(items):\n    total_typo = 0\n    return total_amount"
+                                         "def calculate_total(items):\n    total_fixed = 0\n    return total_amount")))
+            (should (string-match-p "Edited file successfully" res)))
+          (with-temp-buffer
+            (insert-file-contents temp-file)
+            (should (string-match-p "total_fixed = 0" (buffer-string)))))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))

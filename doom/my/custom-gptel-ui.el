@@ -72,7 +72,7 @@
               (second (cadr arg-values))
               (third (caddr arg-values)))
     (if (and (stringp first) (stringp second) (stringp third))
-        ;; New edit tool format: (path old-string new-string &optional replace-all)
+        ;; New edit tool format: (path old new &optional replace-all)
         (let* ((file first)
                (old (or second ""))
                (new (or third ""))
