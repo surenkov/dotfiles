@@ -245,13 +245,13 @@
     :description "Design and plan implementation"
     :parents 'default
     :system (alist-get 'plan gptel-directives)
-    :tools '("fd" "fzf" "rg" "cat" "ast-grep" "read_url""skill" "agent" "todo_write"))
+    :tools '("fd" "fzf" "rg" "cat" "read_url" "skill" "agent" "todo_write"))
   (gptel-make-preset 'build
     :description "Execute implementation plans"
     :parents 'plan
     :system (alist-get 'build gptel-directives)
     :post (lambda () (setq gptel-confirm-tool-calls nil))
-    :tools '("fd" "fzf" "rg" "cat" "ast-grep" "bash" "edit" "read_url" "skill" "agent" "todo_write"))
+    :tools '("fd" "fzf" "rg" "cat" "bash" "edit" "read_url" "skill" "agent" "todo_write"))
   (gptel-make-preset 'compaction
     :description "Compact chat history into a dense summary"
     :parents 'default

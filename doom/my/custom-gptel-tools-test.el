@@ -391,184 +391,131 @@
       (when (buffer-live-p buf) (kill-buffer buf))
       (delete-file temp-file))))
 
-(ert-deftest test-edit-tool-fast-path ()
-  "Test my/edit-tool skips timer delay when no files are open in visiting buffers."
-  (let ((callback-called nil)
-        (result-out nil)
-        (patch "--- a/nonexistent.txt\n+++ b/nonexistent.txt\n@@ -0,0 +1 @@\n+test\n"))
-    (cl-letf* (((symbol-function 'my--async-exec)
-                (lambda (_name _command callback &rest _args)
-                  (funcall callback 0 "Patch applied successfully")
-                  nil)))
-      ;; 1. Fast path: no visiting buffers for nonexistent.txt
-      (my/edit-tool (lambda (out)
-                      (setq callback-called t)
-                      (setq result-out out))
-                    patch)
-      (should callback-called)
-      (should (equal result-out "Patch applied successfully"))))
-
-  ;; 2. Delayed path: visiting buffer exists
-  (let* ((temp-file (make-temp-file "test-edit-tool-"))
-         (buf (find-file-noselect temp-file))
-         (rel-file (file-relative-name temp-file (doom-project-root)))
-         (patch (format "--- a/%s\n+++ b/%s\n@@ -0,0 +1 @@\n+test\n" rel-file rel-file))
-         (timer-scheduled nil)
-         (callback-called nil)
-         (result-out nil))
-    (unwind-protect
-        (cl-letf* (((symbol-function 'my--async-exec)
-                    (lambda (_name _command callback &rest _args)
-                      (funcall callback 0 "Patch applied successfully")
-                      nil))
-                   ((symbol-function 'run-with-timer)
-                    (lambda (delay _repeat fn &rest _args)
-                      (setq timer-scheduled t)
-                      (should (= delay my/custom-gptel-edit-diagnostic-delay))
-                      (funcall fn)
-                      nil)))
-          (my/edit-tool (lambda (out)
-                          (setq callback-called t)
-                          (setq result-out out))
-                        patch)
-          (should timer-scheduled)
-          (should callback-called)
-          (should (equal result-out "Patch applied successfully")))
-      (when (buffer-live-p buf) (kill-buffer buf))
-      (delete-file temp-file))))
-
-(ert-deftest test-clean-patch-string ()
-  "Verify stripping markdown fences from patch strings."
-  (let ((markdown-patch "```diff\n--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-a\n+b\n```"))
-    (should (equal (my--clean-patch-string markdown-patch)
-                   "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-a\n+b\n"))))
-
-(ert-deftest test-cat-file-tool-string-arguments ()
-  "Verify cat tool handles string numbers for offset and limit safely."
-  (let ((my/custom-gptel-sandbox-profile-path nil)
-        (temp-file (make-temp-file "test-cat-str-")))
-    (unwind-protect
-        (progn
-          (with-temp-file temp-file
-            (insert "line1\nline2\nline3\nline4\nline5\n"))
-          (let ((res nil))
-            (my/cat-file-tool (lambda (out) (setq res out))
-                              temp-file "2" "2")
-            ;; Wait briefly for async execution
-            (while (null res)
-              (accept-process-output nil 0.01))
-            (should (string-match-p "2:line2" res))
-            (should (string-match-p "3:line3" res))
-            (should-not (string-match-p "1:line1" res))
-            (should-not (string-match-p "4:line4" res))))
-      (delete-file temp-file))))
-
-(ert-deftest test-edit-tool-existing-file-new-file-patch ()
-  "Verify edit tool removes an existing file if patch specifies --- /dev/null."
-  (let* ((my/custom-gptel-sandbox-profile-path nil)
-         (temp-file (make-temp-file (expand-file-name "test-edit-exist-" (doom-project-root))))
-         (rel-file (file-relative-name temp-file (doom-project-root)))
-         (patch (format "--- /dev/null\n+++ b/%s\n@@ -0,0 +1 @@\n+new content\n" rel-file))
+(ert-deftest test-edit-tool-basic-replace ()
+  "Verify my/edit-tool performs exact string replacement in an existing file."
+  (let* ((temp-file (make-temp-file "test-edit-basic-"))
          (res nil))
     (unwind-protect
         (progn
-          (my/edit-tool (lambda (out) (setq res out)) patch)
-          (while (null res)
-            (accept-process-output nil 0.01))
-          (should-not (string-match-p "Error" res))
+          (with-temp-file temp-file
+            (insert "hello world\nline 2\nline 3\n"))
+          (my/edit-tool (lambda (out) (setq res out))
+                        temp-file "line 2" "line two")
+          (should (string-match-p "Edited file successfully" res))
           (with-temp-buffer
             (insert-file-contents temp-file)
-            (should (equal (buffer-string) "new content\n"))))
-      (when (file-exists-p temp-file)
-        (delete-file temp-file)))))
+            (should (equal (buffer-string) "hello world\nline two\nline 3\n"))))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
 
-(ert-deftest test-edit-tool-fallback-patch-application ()
-  "Verify edit tool falls back to patch command when git apply fails on context mismatch."
-  (let* ((my/custom-gptel-sandbox-profile-path nil)
-         (temp-file (make-temp-file (expand-file-name "test-edit-fallback-" (doom-project-root))))
-         (rel-file (file-relative-name temp-file (doom-project-root)))
+(ert-deftest test-edit-tool-create-new-file ()
+  "Verify my/edit-tool creates a new file when oldString is empty."
+  (let* ((temp-dir (make-temp-file "test-edit-dir-" t))
+         (target (expand-file-name "nested/dir/new.txt" temp-dir))
          (res nil))
     (unwind-protect
         (progn
-          ;; File has extra blank line at start
-          (with-temp-file temp-file
-            (insert "\nfunc Hello() {\n\tfmt.Println(\"hello\")\n}\n"))
-          ;; Patch expects no blank line at start (git apply will fail, patch -p1 will succeed)
-          (let ((patch (format "--- a/%s\n+++ b/%s\n@@ -1,3 +1,3 @@\n func Hello() {\n-\tfmt.Println(\"hello\")\n+\tfmt.Println(\"world\")\n }\n"
-                               rel-file rel-file)))
-            (my/edit-tool (lambda (out) (setq res out)) patch)
-            (while (null res)
-              (accept-process-output nil 0.01))
-            (should-not (string-match-p "Error applying patch" res))
-            (with-temp-buffer
-              (insert-file-contents temp-file)
-              (should (string-match-p "fmt.Println(\"world\")" (buffer-string))))))
-      (when (file-exists-p temp-file)
-        (delete-file temp-file))
-      (let ((rej (concat temp-file ".rej"))
-            (orig (concat temp-file ".orig")))
-        (when (file-exists-p rej) (delete-file rej))
-        (when (file-exists-p orig) (delete-file orig))))))
-
-(ert-deftest test-split-patch-by-file ()
-  "Verify splitting a multi-file patch into per-file patches."
-  (let ((multi-patch "--- a/file1.go\n+++ b/file1.go\n@@ -1 +1 @@\n-a\n+b\n--- /dev/null\n+++ b/file2.go\n@@ -0,0 +1 @@\n+c\n"))
-    (should (equal (my--split-patch-by-file multi-patch)
-                   '("--- a/file1.go\n+++ b/file1.go\n@@ -1 +1 @@\n-a\n+b\n"
-                     "--- /dev/null\n+++ b/file2.go\n@@ -0,0 +1 @@\n+c\n")))))
-
-(ert-deftest test-normalize-patch-new-file ()
-  "Verify new file patch normalization adds '+' to empty and context lines."
-  (let ((bad-patch "--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,3 @@\n+package foo\n\n func bar() {}\n"))
-    (should (equal (my--normalize-patch-string bad-patch)
-                   "--- /dev/null\n+++ b/new.go\n@@ -0,0 +1,3 @@\n+package foo\n+\n+func bar() {}\n"))))
-
-(ert-deftest test-normalize-patch-existing-file ()
-  "Verify existing file patch normalization adds leading spaces to context lines."
-  (let ((bad-patch "--- a/old.go\n+++ b/old.go\n@@ -1,3 +1,3 @@\nfunc foo() {\n\tbar()\n+	baz()\n}\n"))
-    (should (equal (my--normalize-patch-string bad-patch)
-                   "--- a/old.go\n+++ b/old.go\n@@ -1,3 +1,3 @@\n func foo() {\n \tbar()\n+\tbaz()\n }\n"))))
-
-(ert-deftest test-edit-tool-new-file-empty-lines ()
-  "Verify edit-tool handles new file patches containing bare empty lines."
-  (let* ((my/custom-gptel-sandbox-profile-path nil)
-         (target (expand-file-name "test-new-empty.go" (doom-project-root)))
-         (rel-file (file-relative-name target (doom-project-root)))
-         (patch (format "--- /dev/null\n+++ b/%s\n@@ -0,0 +1,3 @@\n+package main\n\n+func main() {}\n" rel-file))
-         (res nil))
-    (unwind-protect
-        (progn
-          (my/edit-tool (lambda (out) (setq res out)) patch)
-          (while (null res)
-            (accept-process-output nil 0.01))
-          (should-not (string-match-p "Error" res))
+          (my/edit-tool (lambda (out) (setq res out))
+                        target "" "created content")
+          (should (string-match-p "Edited file successfully" res))
           (should (file-exists-p target))
           (with-temp-buffer
             (insert-file-contents target)
-            (should (equal (buffer-string) "package main\n\nfunc main() {}\n"))))
-      (when (file-exists-p target) (delete-file target)))))
+            (should (equal (buffer-string) "created content"))))
+      (delete-directory temp-dir t))))
 
-(ert-deftest test-edit-tool-multi-file-patch ()
-  "Verify edit-tool applies multi-file patches successfully."
-  (let* ((my/custom-gptel-sandbox-profile-path nil)
-         (file1 (make-temp-file (expand-file-name "test-multi1-" (doom-project-root))))
-         (file2 (expand-file-name "test-multi2.go" (doom-project-root)))
-         (rel1 (file-relative-name file1 (doom-project-root)))
-         (rel2 (file-relative-name file2 (doom-project-root)))
-         (patch (format "--- a/%s\n+++ b/%s\n@@ -1 +1 @@\n-old\n+new\n--- /dev/null\n+++ b/%s\n@@ -0,0 +1 @@\n+created\n" rel1 rel1 rel2))
+(ert-deftest test-edit-tool-reject-empty-oldstring-on-existing-file ()
+  "Verify my/edit-tool rejects empty oldString when target file exists."
+  (let* ((temp-file (make-temp-file "test-edit-empty-"))
          (res nil))
     (unwind-protect
         (progn
-          (with-temp-file file1 (insert "old\n"))
-          (my/edit-tool (lambda (out) (setq res out)) patch)
-          (while (null res)
-            (accept-process-output nil 0.01))
-          (should-not (string-match-p "Error" res))
+          (with-temp-file temp-file (insert "original"))
+          (my/edit-tool (lambda (out) (setq res out))
+                        temp-file "" "replacement")
+          (should (string-match-p "oldString cannot be empty" res))
           (with-temp-buffer
-            (insert-file-contents file1)
-            (should (equal (buffer-string) "new\n")))
+            (insert-file-contents temp-file)
+            (should (equal (buffer-string) "original"))))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-reject-identical-strings ()
+  "Verify my/edit-tool fails if oldString and newString are identical."
+  (let* ((temp-file (make-temp-file "test-edit-same-"))
+         (res nil))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file (insert "content"))
+          (my/edit-tool (lambda (out) (setq res out))
+                        temp-file "same" "same")
+          (should (string-match-p "identical" res)))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-replace-all ()
+  "Verify my/edit-tool replaces all occurrences when replaceAll is t."
+  (let* ((temp-file (make-temp-file "test-edit-all-"))
+         (res nil))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file (insert "foo bar foo baz foo"))
+          (my/edit-tool (lambda (out) (setq res out))
+                        temp-file "foo" "qux" t)
+          (should (string-match-p "Edited file successfully" res))
           (with-temp-buffer
-            (insert-file-contents file2)
-            (should (equal (buffer-string) "created\n"))))
-      (when (file-exists-p file1) (delete-file file1))
-      (when (file-exists-p file2) (delete-file file2)))))
+            (insert-file-contents temp-file)
+            (should (equal (buffer-string) "qux bar qux baz qux"))))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-multiple-matches-error ()
+  "Verify my/edit-tool signals an error when oldString occurs multiple times without replaceAll."
+  (let* ((temp-file (make-temp-file "test-edit-multi-"))
+         (res nil))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file (insert "foo bar foo"))
+          (my/edit-tool (lambda (out) (setq res out))
+                        temp-file "foo" "qux")
+          (should (string-match-p "Found multiple matches" res)))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-line-trimmed-replacer ()
+  "Verify my/edit-tool falls back to line-trimmed matching when whitespace differs."
+  (let* ((temp-file (make-temp-file "test-edit-trimmed-"))
+         (res nil))
+    (unwind-protect
+        (progn
+          (with-temp-file temp-file
+            (insert "def foo():\n    print('hello')\n    return 42\n"))
+          ;; Search string has different leading whitespace
+          (my/edit-tool (lambda (out) (setq res out))
+                        temp-file
+                        "print('hello')\nreturn 42"
+                        "print('world')\nreturn 100")
+          (should (string-match-p "Edited file successfully" res))
+          (with-temp-buffer
+            (insert-file-contents temp-file)
+            (should (string-match-p "print('world')" (buffer-string)))))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-crlf-line-endings ()
+  "Verify my/edit-tool preserves CRLF line endings."
+  (let* ((temp-file (make-temp-file "test-edit-crlf-"))
+         (res nil))
+    (unwind-protect
+        (progn
+          (with-temp-buffer
+            (insert "line1\r\nold text\r\nline3\r\n")
+            (let ((coding-system-for-write 'no-conversion))
+              (write-region (point-min) (point-max) temp-file nil 'silent)))
+          (my/edit-tool (lambda (out) (setq res out))
+                        temp-file "old text" "new text")
+          (should (string-match-p "Edited file successfully" res))
+          (with-temp-buffer
+            (insert-file-contents-literally temp-file)
+            (should (equal (buffer-string) "line1\r\nnew text\r\nline3\r\n"))))
+      (when (file-exists-p temp-file) (delete-file temp-file)))))
+
+(ert-deftest test-edit-tool-disproportionate-match-rejection ()
+  "Verify my/edit-tool rejects replacement when match span is disproportionately large."
+  (let ((search "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8")
+        (old "line1\nline2"))
+    (should (my--edit-is-disproportionate-match search old))))

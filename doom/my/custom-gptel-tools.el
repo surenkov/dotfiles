@@ -370,167 +370,413 @@ MAX-RESULTS is the maximum number of matches to return."
         (list shell-file-name shell-command-switch command))
        (lambda (_code out) (funcall callback (if (string-empty-p out) "No matches found" out)))))))
 
-(defun my--clean-patch-string (patch)
-  "Clean markdown code blocks or surrounding wrapper text from PATCH string."
-  (let ((str patch))
-    (when (string-match "\\`[[:space:]\n]*```[a-zA-Z0-9_-]*\n" str)
-      (setq str (substring str (match-end 0))))
-    (when (string-match "\n```[[:space:]\n]*\\'" str)
-      (setq str (substring str 0 (match-beginning 0))))
-    (if (string-suffix-p "\n" str) str (concat str "\n"))))
+(defun my--edit-normalize-line-endings (text)
+  "Normalize CRLF line endings to LF in TEXT."
+  (replace-regexp-in-string "\r\n" "\n" text t t))
 
-(defun my--split-patch-by-file (patch)
-  "Split multi-file PATCH string into a list of single-file patch strings."
-  (let ((lines (split-string patch "\n"))
-        (file-patches nil)
-        (current-lines nil))
-    (dolist (line lines)
-      (if (and (string-prefix-p "--- " line)
-               (cl-some (lambda (l) (string-prefix-p "+++ " l)) current-lines))
-          (progn
-            (push (concat (string-join (nreverse current-lines) "\n") "\n") file-patches)
-            (setq current-lines (list line)))
-        (push line current-lines)))
-    (when current-lines
-      (let ((p (string-trim-right (string-join (nreverse current-lines) "\n"))))
-        (unless (string-empty-p p)
-          (push (concat p "\n") file-patches))))
-    (nreverse file-patches)))
+(defun my--edit-detect-line-ending (text)
+  "Detect if TEXT uses CRLF (\"\\r\\n\") or LF (\"\\n\")."
+  (if (string-match-p "\r\n" text) "\r\n" "\n"))
 
-(defun my--normalize-patch-string (patch)
-  "Normalize PATCH string by adding missing '+' or ' ' line prefixes in hunks."
-  (let ((subpatches (my--split-patch-by-file patch))
-        (norm-subpatches nil))
-    (dolist (subpatch subpatches)
-      (let* ((raw-lines (split-string subpatch "\n"))
-             (lines (if (and (string-suffix-p "\n" subpatch)
-                             (equal (car (last raw-lines)) ""))
-                        (butlast raw-lines)
-                      raw-lines))
-             (is-new-file (cl-some (lambda (l)
-                                     (or (string-prefix-p "--- /dev/null" l)
-                                         (string-prefix-p "---  /dev/null" l)))
-                                   lines))
-             (in-hunk nil)
-             (norm-lines nil))
-        (dolist (line lines)
-          (cond
-           ((or (string-prefix-p "--- " line) (string-prefix-p "+++ " line))
-            (setq in-hunk nil)
-            (push line norm-lines))
-           ((string-prefix-p "@@" line)
-            (setq in-hunk t)
-            (push line norm-lines))
-           (in-hunk
-            (if is-new-file
-                (cond
-                 ((string-prefix-p "+" line) (push line norm-lines))
-                 ((string-prefix-p " " line) (push (concat "+" (substring line 1)) norm-lines))
-                 (t (push (concat "+" line) norm-lines)))
+(defun my--edit-convert-to-line-ending (text ending)
+  "Convert TEXT to ENDING line endings (\"\\n\" or \"\\r\\n\")."
+  (let ((norm (my--edit-normalize-line-endings text)))
+    (if (equal ending "\r\n")
+        (replace-regexp-in-string "\n" "\r\n" norm t t)
+      norm)))
+
+(defun my--levenshtein (a b)
+  "Compute Levenshtein distance between string A and string B."
+  (let ((la (length a))
+        (lb (length b)))
+    (cond
+     ((zerop la) lb)
+     ((zerop lb) la)
+     (t
+      (let ((row (vconcat (number-sequence 0 lb))))
+        (dotimes (i la)
+          (let ((next-row (make-vector (1+ lb) 0))
+                (char-a (aref a i)))
+            (aset next-row 0 (1+ i))
+            (dotimes (j lb)
+              (let* ((char-b (aref b j))
+                     (cost (if (= char-a char-b) 0 1))
+                     (del (1+ (aref row (1+ j))))
+                     (ins (1+ (aref next-row j)))
+                     (sub (+ (aref row j) cost)))
+                (aset next-row (1+ j) (min del ins sub))))
+            (setq row next-row)))
+        (aref row lb))))))
+
+(defun my--edit-unescape-string (str)
+  "Unescape standard escape sequences in STR."
+  (let ((i 0)
+        (len (length str))
+        (res ""))
+    (while (< i len)
+      (if (and (= (aref str i) ?\\) (< (1+ i) len))
+          (let ((next (aref str (1+ i))))
+            (pcase next
+              (?n (setq res (concat res "\n")))
+              (?t (setq res (concat res "\t")))
+              (?r (setq res (concat res "\r")))
+              (?\' (setq res (concat res "'")))
+              (?\" (setq res (concat res "\"")))
+              (?\` (setq res (concat res "`")))
+              (?\\ (setq res (concat res "\\")))
+              (?$ (setq res (concat res "$")))
+              (_ (setq res (concat res (string ?\\ next)))))
+            (setq i (+ i 2)))
+        (setq res (concat res (string (aref str i))))
+        (setq i (1+ i))))
+    res))
+
+(defun my--edit-count-occurrences (content search)
+  "Count occurrences of SEARCH string in CONTENT."
+  (if (string-empty-p search)
+      (1+ (length content))
+    (let ((count 0)
+          (pos 0)
+          (slen (length search)))
+      (while (setq pos (string-search search content pos))
+        (setq count (1+ count))
+        (setq pos (+ pos slen)))
+      count)))
+
+(defun my--edit-is-disproportionate-match (search old-string)
+  "Check if SEARCH match span is disproportionately larger than OLD-STRING."
+  (let ((old-lines (length (split-string old-string "\n")))
+        (search-lines (length (split-string search "\n"))))
+    (cond
+     ((>= search-lines (max (+ old-lines 3) (* old-lines 2))) t)
+     ((= old-lines 1) nil)
+     (t (> (length (string-trim search))
+           (max (+ (length (string-trim old-string)) 500)
+                (* (length (string-trim old-string)) 4)))))))
+
+(defun my--edit-remove-common-indentation (text)
+  "Remove common leading whitespace from non-empty lines in TEXT."
+  (let* ((lines (split-string text "\n"))
+         (non-empty (cl-remove-if (lambda (l) (string-empty-p (string-trim l))) lines)))
+    (if (null non-empty)
+        text
+      (let ((min-indent (apply #'min
+                               (mapcar (lambda (l)
+                                         (if (string-match "^\\([ \t]*\\)" l)
+                                             (length (match-string 1 l))
+                                           0))
+                                       non-empty))))
+        (mapconcat (lambda (l)
+                     (if (string-empty-p (string-trim l))
+                         l
+                       (substring l (min (length l) min-indent))))
+                   lines "\n")))))
+
+(defun my--edit-get-substring-by-line-range (lines start-idx end-idx content)
+  "Extract substring from CONTENT corresponding to line indices START-IDX to END-IDX in LINES."
+  (let ((start-pos 0))
+    (dotimes (k start-idx)
+      (setq start-pos (+ start-pos (length (nth k lines)) 1)))
+    (let ((end-pos start-pos))
+      (cl-loop for k from start-idx to end-idx do
+               (setq end-pos (+ end-pos (length (nth k lines)) (if (< k end-idx) 1 0))))
+      (substring content start-pos (min (length content) end-pos)))))
+
+(defun my--edit-find-candidates (content find)
+  "Generate candidate substrings of CONTENT matching FIND using opencode's fallback replacers."
+  (let ((candidates nil)
+        (orig-lines (split-string content "\n"))
+        (search-lines (split-string find "\n")))
+
+    (cl-flet ((add-cand (c)
+                (when (and (stringp c)
+                           (not (string-empty-p c))
+                           (string-search c content)
+                           (not (member c candidates)))
+                  (push c candidates))))
+
+      ;; 1. SimpleReplacer (exact match)
+      (when (string-search find content)
+        (add-cand find))
+
+      ;; 2. LineTrimmedReplacer
+      (when (null candidates)
+        (let ((s-lines (copy-sequence search-lines)))
+          (when (and (cdr s-lines) (string-empty-p (car (last s-lines))))
+            (setq s-lines (nbutlast s-lines)))
+          (let ((s-len (length s-lines))
+                (o-len (length orig-lines)))
+            (cl-loop for i from 0 to (- o-len s-len) do
+                     (let ((matched t))
+                       (cl-loop for j from 0 below s-len do
+                                (unless (equal (string-trim (nth (+ i j) orig-lines))
+                                               (string-trim (nth j s-lines)))
+                                  (setq matched nil)))
+                       (when matched
+                         (add-cand (my--edit-get-substring-by-line-range orig-lines i (+ i s-len -1) content))))))))
+
+      ;; 3. BlockAnchorReplacer
+      (when (null candidates)
+        (let ((s-lines (copy-sequence search-lines)))
+          (when (and (cdr s-lines) (string-empty-p (car (last s-lines))))
+            (setq s-lines (nbutlast s-lines)))
+          (when (>= (length s-lines) 3)
+            (let* ((first-search (string-trim (car s-lines)))
+                   (last-search (string-trim (car (last s-lines))))
+                   (search-block-size (length s-lines))
+                   (max-line-delta (max 1 (floor (* search-block-size 0.25))))
+                   (o-len (length orig-lines))
+                   (cands nil))
+              (cl-loop for i from 0 below o-len do
+                       (when (equal (string-trim (nth i orig-lines)) first-search)
+                         (cl-loop for j from (+ i 2) below o-len do
+                                  (when (equal (string-trim (nth j orig-lines)) last-search)
+                                    (let ((actual-size (+ (- j i) 1)))
+                                      (when (<= (abs (- actual-size search-block-size)) max-line-delta)
+                                        (push (cons i j) cands)))
+                                    (cl-return)))))
+              (setq cands (nreverse cands))
               (cond
-               ((or (string-prefix-p "+" line)
-                    (string-prefix-p "-" line)
-                    (string-prefix-p " " line)
-                    (string-prefix-p "\\" line)
-                    (string-prefix-p "@" line))
-                (push line norm-lines))
-               ((string-empty-p line)
-                (push " " norm-lines))
-               (t
-                (push (concat " " line) norm-lines)))))
-           (t
-            (push line norm-lines))))
-        (let ((result (string-trim-right (string-join (nreverse norm-lines) "\n"))))
-          (unless (string-empty-p result)
-            (push (concat result "\n") norm-subpatches)))))
-    (string-join (nreverse norm-subpatches) "")))
+               ((= (length cands) 1)
+                (let* ((cand (car cands))
+                       (start-line (car cand))
+                       (end-line (cdr cand))
+                       (actual-size (+ (- end-line start-line) 1))
+                       (lines-to-check (min (- search-block-size 2) (- actual-size 2)))
+                       (similarity 0.0))
+                  (if (> lines-to-check 0)
+                      (progn
+                        (cl-loop for j from 1 below (min (1- search-block-size) (1- actual-size)) do
+                                 (let* ((orig-line (string-trim (nth (+ start-line j) orig-lines)))
+                                        (search-line (string-trim (nth j s-lines)))
+                                        (max-len (max (length orig-line) (length search-line))))
+                                   (when (> max-len 0)
+                                     (let ((dist (my--levenshtein orig-line search-line)))
+                                       (setq similarity (+ similarity (/ (- 1.0 (/ (float dist) max-len)) lines-to-check)))))))
+                        (when (>= similarity 0.65)
+                          (add-cand (my--edit-get-substring-by-line-range orig-lines start-line end-line content))))
+                    (add-cand (my--edit-get-substring-by-line-range orig-lines start-line end-line content)))))
+               ((> (length cands) 1)
+                (let ((best-match nil)
+                      (max-sim -1.0))
+                  (dolist (cand cands)
+                    (let* ((start-line (car cand))
+                           (end-line (cdr cand))
+                           (actual-size (+ (- end-line start-line) 1))
+                           (lines-to-check (min (- search-block-size 2) (- actual-size 2)))
+                           (similarity 0.0))
+                      (if (> lines-to-check 0)
+                          (progn
+                            (cl-loop for j from 1 below (min (1- search-block-size) (1- actual-size)) do
+                                     (let* ((orig-line (string-trim (nth (+ start-line j) orig-lines)))
+                                            (search-line (string-trim (nth j s-lines)))
+                                            (max-len (max (length orig-line) (length search-line))))
+                                       (when (> max-len 0)
+                                         (let ((dist (my--levenshtein orig-line search-line)))
+                                           (setq similarity (+ similarity (- 1.0 (/ (float dist) max-len))))))))
+                            (setq similarity (/ similarity lines-to-check)))
+                        (setq similarity 1.0))
+                      (when (> similarity max-sim)
+                        (setq max-sim similarity)
+                        (setq best-match cand))))
+                  (when (and best-match (>= max-sim 0.65))
+                    (add-cand (my--edit-get-substring-by-line-range orig-lines (car best-match) (cdr best-match) content))))))))))
 
-(defun my--get-files-from-patch (patch)
-  "Extract file paths from PATCH string."
-  (let ((files nil)
-        (lines (split-string patch "\n")))
-    (dolist (line lines)
-      (when (string-match "^\\+\\+\\+\\s-+\\(?:b/\\)?\\(.+\\)$" line)
-        (let ((file (match-string 1 line)))
-          (unless (equal file "/dev/null")
-            (push file files)))))
-    (delete-dups (nreverse files))))
+      ;; 4. WhitespaceNormalizedReplacer
+      (when (null candidates)
+        (let* ((norm-find (replace-regexp-in-string "[ \t\n\r]+" " " (string-trim find)))
+               (o-len (length orig-lines))
+               (s-len (length search-lines)))
+          (cl-loop for i from 0 to (- o-len s-len) do
+                   (let ((block (string-join (cl-subseq orig-lines i (+ i s-len)) "\n")))
+                     (when (equal (replace-regexp-in-string "[ \t\n\r]+" " " (string-trim block)) norm-find)
+                       (add-cand block))))))
 
-(defun my--prepare-new-files-for-patch (patch root)
-  "If PATCH creates a new file (source /dev/null), remove existing file if present."
-  (let ((lines (split-string patch "\n")))
-    (dotimes (i (1- (length lines)))
-      (let ((line1 (nth i lines))
-            (line2 (nth (1+ i) lines)))
-        (when (and (string-match "^---\\s-+/dev/null" line1)
-                   (string-match "^\\+\\+\\+\\s-+\\(?:b/\\)?\\(.+\\)$" line2))
-          (let* ((rel-file (match-string 1 line2))
-                 (abs-file (expand-file-name rel-file root)))
-            (when (and (not (equal rel-file "/dev/null"))
-                       (file-exists-p abs-file))
-              (ignore-errors (delete-file abs-file)))))))))
+      ;; 5. IndentationFlexibleReplacer
+      (when (null candidates)
+        (let* ((norm-find (my--edit-remove-common-indentation find))
+               (o-len (length orig-lines))
+               (s-len (length search-lines)))
+          (cl-loop for i from 0 to (- o-len s-len) do
+                   (let ((block (string-join (cl-subseq orig-lines i (+ i s-len)) "\n")))
+                     (when (equal (my--edit-remove-common-indentation block) norm-find)
+                       (add-cand block))))))
 
-(defun my--edit-tool-finish (callback files root out)
-  "Finish edit tool execution, running diagnostics if buffers are visiting FILES."
-  (let ((visiting-bufs (my--get-visiting-buffers files root)))
-    (if (null visiting-bufs)
-        (funcall callback out)
-      (run-with-timer
-       my/custom-gptel-edit-diagnostic-delay nil
-       (lambda ()
-         (let ((diag-reports nil))
-           (dolist (file files)
-             (let ((diags (my--get-diagnostics-for-file file root)))
-               (when diags
-                 (push (format "File `%s` diagnostics:\n%s" file diags) diag-reports))))
-           (if diag-reports
-               (funcall callback (format "%s\n\nWARNING: Post-patch compilation/linting errors found:\n%s"
-                                         out
-                                         (mapconcat #'identity (nreverse diag-reports) "\n\n")))
-             (funcall callback out))))))))
+      ;; 6. EscapeNormalizedReplacer
+      (when (null candidates)
+        (let ((unescaped-find (my--edit-unescape-string find)))
+          (if (string-search unescaped-find content)
+              (add-cand unescaped-find)
+            (let ((unescaped-lines (split-string unescaped-find "\n"))
+                  (o-len (length orig-lines)))
+              (let ((s-len (length unescaped-lines)))
+                (cl-loop for i from 0 to (- o-len s-len) do
+                         (let ((block (string-join (cl-subseq orig-lines i (+ i s-len)) "\n")))
+                           (when (equal (my--edit-unescape-string block) unescaped-find)
+                             (add-cand block)))))))))
 
-(defun my/edit-tool (callback patch)
-  "Apply PATCH using git apply (with patch fallback) and call CALLBACK with the result.
-Normalizes patch formatting and applies multi-file patches per-file."
-  (let* ((root (doom-project-root))
-         (clean-patch (my--clean-patch-string patch))
-         (norm-patch (my--normalize-patch-string clean-patch))
-         (files (my--get-files-from-patch norm-patch))
-         (subpatches (my--split-patch-by-file norm-patch)))
-    (my--prepare-new-files-for-patch norm-patch root)
-    (let ((outputs nil)
-          (apply-next nil))
-      (setq apply-next
-            (lambda (remaining-patches)
-              (if (null remaining-patches)
-                  (let ((combined-out (string-trim-right (string-join (nreverse outputs) "\n"))))
-                    (my--edit-tool-finish callback files root combined-out))
-                (let* ((subpatch (car remaining-patches))
-                       (git-cmd '("git" "apply" "--verbose" "--recount" "--ignore-space-change" "--allow-empty" "--" "-")))
-                  (my--async-exec
-                   "gptel-git-apply"
-                   (my--wrap-sandbox-command git-cmd)
-                   (lambda (code out)
-                     (if (zerop code)
-                         (progn
-                           (push out outputs)
-                           (funcall apply-next (cdr remaining-patches)))
-                       ;; Fallback to GNU patch command if git apply fails
-                       (let ((patch-cmd '("patch" "-p1" "--forward" "--reject-file=-")))
-                         (my--async-exec
-                          "gptel-patch-fallback"
-                          (my--wrap-sandbox-command patch-cmd)
-                          (lambda (p-code p-out)
-                            (if (zerop p-code)
-                                (progn
-                                  (push p-out outputs)
-                                  (funcall apply-next (cdr remaining-patches)))
-                              (funcall callback (format "Error applying patch (exit code %d):\n%s" code out))))
-                          subpatch
-                          -1))))
-                   subpatch
-                   -1)))))
-      (funcall apply-next subpatches))))
+      ;; 7. TrimmedBoundaryReplacer
+      (when (null candidates)
+        (let ((trimmed-find (string-trim find)))
+          (unless (equal trimmed-find find)
+            (if (string-search trimmed-find content)
+                (add-cand trimmed-find)
+              (let ((t-lines (split-string trimmed-find "\n"))
+                    (o-len (length orig-lines)))
+                (let ((s-len (length t-lines)))
+                  (cl-loop for i from 0 to (- o-len s-len) do
+                           (let ((block (string-join (cl-subseq orig-lines i (+ i s-len)) "\n")))
+                             (when (equal (string-trim block) trimmed-find)
+                               (add-cand block))))))))))
+
+      ;; 8. ContextAwareReplacer
+      (when (null candidates)
+        (let ((s-lines (copy-sequence search-lines)))
+          (when (and (cdr s-lines) (string-empty-p (car (last s-lines))))
+            (setq s-lines (nbutlast s-lines)))
+          (when (>= (length s-lines) 3)
+            (let* ((first-line (string-trim (car s-lines)))
+                   (last-line (string-trim (car (last s-lines))))
+                   (s-len (length s-lines))
+                   (o-len (length orig-lines)))
+              (cl-loop for i from 0 to (- o-len s-len) do
+                       (when (equal (string-trim (nth i orig-lines)) first-line)
+                         (let ((j (+ i s-len -1)))
+                           (when (equal (string-trim (nth j orig-lines)) last-line)
+                             (let ((block-lines (cl-subseq orig-lines i (1+ j)))
+                                   (matching 0)
+                                   (total 0))
+                               (cl-loop for k from 1 below (1- s-len) do
+                                        (let ((bl (string-trim (nth k block-lines)))
+                                              (fl (string-trim (nth k s-lines))))
+                                          (when (or (> (length bl) 0) (> (length fl) 0))
+                                            (setq total (1+ total))
+                                            (when (equal bl fl)
+                                              (setq matching (1+ matching))))))
+                               (when (or (= total 0) (>= (/ (float matching) total) 0.5))
+                                 (add-cand (string-join block-lines "\n"))
+                                 (cl-return)))))))))))
+
+      ;; 9. MultiOccurrenceReplacer
+      (when (null candidates)
+        (let ((pos 0)
+              (slen (length find)))
+          (while (and (> slen 0) (setq pos (string-search find content pos)))
+            (add-cand find)
+            (setq pos (+ pos slen)))))
+
+      (nreverse candidates))))
+
+(cl-defun my--edit-replace (content old-string new-string replace-all)
+  "Replace OLD-STRING with NEW-STRING in CONTENT.
+If REPLACE-ALL is non-nil, replace all matches.
+Returns updated content string, or signals an error if replacement fails."
+  (when (equal old-string new-string)
+    (error "No changes to apply: oldString and newString are identical."))
+  (when (string-empty-p old-string)
+    (error "oldString cannot be empty when editing an existing file. Provide the exact text to replace, or use write for an intentional full-file replacement."))
+
+  (let ((candidates (my--edit-find-candidates content old-string))
+        (found-multiple nil))
+    (unless candidates
+      (error "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."))
+    (dolist (search candidates)
+      (when (my--edit-is-disproportionate-match search old-string)
+        (error "Refusing replacement because the matched span is much larger than oldString. Re-read the file and provide the full exact oldString for the intended replacement."))
+      (if replace-all
+          (cl-return-from my--edit-replace
+            (replace-regexp-in-string (regexp-quote search) new-string content t t))
+        (let ((first-pos (string-search search content))
+              (last-pos (let ((p nil) (pos 0) (slen (length search)))
+                          (while (setq pos (string-search search content pos))
+                            (setq p pos)
+                            (setq pos (+ pos slen)))
+                          p)))
+          (if (equal first-pos last-pos)
+              (cl-return-from my--edit-replace
+                (concat (substring content 0 first-pos)
+                        new-string
+                        (substring content (+ first-pos (length search)))))
+            (setq found-multiple t)))))
+    (if found-multiple
+        (error "Found multiple matches for oldString. Provide more surrounding context to make the match unique.")
+      (error "Could not find oldString in the file. It must match exactly, including whitespace, indentation, and line endings."))))
+
+(cl-defun my/edit-tool (callback path old-string new-string &optional replace-all &rest kwargs)
+  "Perform string replacement on file at PATH replacing OLD-STRING with NEW-STRING.
+If REPLACE-ALL is non-nil, replace all occurrences.
+CALLBACK is called with the result string."
+  (let* ((actual-path (or (and (stringp path) (not (string-empty-p path)) path)
+                          (plist-get kwargs :filePath)
+                          (plist-get kwargs :path)))
+         (actual-replace-all (if (eq replace-all :json-false) nil (or replace-all (plist-get kwargs :replaceAll)))))
+    (unless actual-path
+      (funcall callback "Error: path is required")
+      (cl-return-from my/edit-tool nil))
+    (when (equal old-string new-string)
+      (funcall callback "Error: No changes to apply: oldString and newString are identical.")
+      (cl-return-from my/edit-tool nil))
+
+    (let* ((root (doom-project-root))
+           (file-path (expand-file-name actual-path root))
+           (rel-path (file-relative-name file-path root)))
+      (condition-case err
+          (if (string-empty-p old-string)
+              ;; Creating new file or erroring if file exists
+              (if (file-exists-p file-path)
+                  (funcall callback "Error: oldString cannot be empty when editing an existing file. Provide the exact text to replace, or use write for an intentional full-file replacement.")
+                (make-directory (file-name-directory file-path) t)
+                (with-temp-file file-path
+                  (insert new-string))
+                ;; Revert visiting buffer if any
+                (let ((buf (find-buffer-visiting file-path)))
+                  (when (buffer-live-p buf)
+                    (with-current-buffer buf
+                      (revert-buffer t t t))))
+                (let ((diags (my--get-diagnostics-for-file file-path root))
+                      (msg (format "Edited file successfully: %s\nReplacements: 1"
+                                   rel-path)))
+                  (if diags
+                      (funcall callback (format "%s\n\nWARNING: Post-patch compilation/linting errors found:\nFile `%s` diagnostics:\n%s"
+                                                msg rel-path diags))
+                    (funcall callback msg))))
+
+            ;; Existing file modification
+            (unless (file-exists-p file-path)
+              (error "File %s not found" file-path))
+            (when (file-directory-p file-path)
+              (error "Path is a directory, not a file: %s" file-path))
+
+            (let* ((content-old (with-temp-buffer
+                                  (insert-file-contents-literally file-path)
+                                  (buffer-string)))
+                   (ending (my--edit-detect-line-ending content-old))
+                   (old (my--edit-convert-to-line-ending old-string ending))
+                   (replacement (my--edit-convert-to-line-ending new-string ending))
+                   (content-new (my--edit-replace content-old old replacement actual-replace-all)))
+
+              (with-temp-buffer
+                (insert content-new)
+                (let ((coding-system-for-write 'no-conversion))
+                  (write-region (point-min) (point-max) file-path nil 'silent)))
+
+              ;; Update visiting buffer if open
+              (let ((buf (find-buffer-visiting file-path)))
+                (when (buffer-live-p buf)
+                  (with-current-buffer buf
+                    (revert-buffer t t t))))
+
+              (let ((diags (my--get-diagnostics-for-file file-path root))
+                    (msg (format "Edited file successfully: %s\nReplacements: %d"
+                                 rel-path
+                                 (my--edit-count-occurrences content-old old))))
+                (if diags
+                    (funcall callback (format "%s\n\nWARNING: Post-patch compilation/linting errors found:\nFile `%s` diagnostics:\n%s"
+                                              msg rel-path diags))
+                  (funcall callback msg)))))
+
+        (error
+         (funcall callback (format "Error: %s" (error-message-string err))))))))
 
 (defun my/shell-tool (callback command)
   "Run COMMAND in a shell and call CALLBACK with the result."
@@ -711,17 +957,20 @@ EXTRA-ARGS is an optional list of extra string flags."
     (:name "edit"
      :function my/edit-tool
      :category "filesystem"
-     :description "Apply a GNU unified diff format patch to one or more files. This is the primary tool for code modifications.
-- Use relative paths from the project root in --- a/ and +++ b/ headers.
-- Include @@ -start,len +start,len @@ hunk headers.
-- Provide at least 3 lines of context (lines starting with ' ' or '+' or '-') around changes to ensure the patch applies cleanly.
-- To create a new file, use --- /dev/null as the source.
-- To delete a file, use +++ /dev/null as the destination.
-- Multiple files can be patched in a single call by concatenating their diffs.
-The tool automatically handles minor line count mismatches and whitespace variations."
+     :description "Performs string replacements in a file using oldString and newString.
+Usage:
+- oldString: Exact text to replace.
+- newString: Replacement text (must differ from oldString).
+- replaceAll: Optional boolean to replace all occurrences of oldString (default false).
+- path: Relative path from project root or absolute path of file to modify.
+If oldString is empty (\"\") and the file does not exist, a new file will be created with newString.
+If oldString is empty (\"\") and the file exists, the tool will return an error."
      :async t
      :confirm t
-     :args ((:name "patch" :type string :description "The unified diff content to apply.")))
+     :args ((:name "path" :type string :description "Path to the file to modify.")
+            (:name "oldString" :type string :description "The exact text to replace.")
+            (:name "newString" :type string :description "The text to replace it with.")
+            (:name "replaceAll" :type boolean :description "Replace all occurrences of oldString (default false)." :optional t)))
     (:name "bash"
      :function my/shell-tool
      :category "system"
